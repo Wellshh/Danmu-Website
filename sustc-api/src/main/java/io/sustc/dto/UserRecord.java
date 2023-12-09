@@ -69,4 +69,5 @@ public class UserRecord {
         USER,
         SUPERUSER,
     }
+    private boolean User_is_Deleted;
 }

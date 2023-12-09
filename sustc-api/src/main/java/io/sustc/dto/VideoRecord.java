@@ -80,4 +80,5 @@ public class VideoRecord {
      * The watch durations in seconds for the viewers {@code viewerMids}
      */
     private float[] viewTime;
+    private boolean Video_is_Deleted;
 }
