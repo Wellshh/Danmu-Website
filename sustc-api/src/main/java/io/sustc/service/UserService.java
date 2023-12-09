@@ -25,7 +25,7 @@ public interface UserService {
 
     /**
      * Deletes a user.
-     *
+
      * @param auth indicates the current user
      * @param mid  the user to be deleted
      * @return operation success or not
