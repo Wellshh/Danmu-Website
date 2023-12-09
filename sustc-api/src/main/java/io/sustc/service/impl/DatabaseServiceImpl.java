@@ -9,7 +9,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
+
 import java.sql.*;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -134,10 +140,6 @@ public class DatabaseServiceImpl implements DatabaseService {
             throw new RuntimeException(ex);
         }
     }
-
-
-
-
     /*
      * The following code is just a quick example of using jdbc datasource.
      * Practically, the code interacts with database is usually written in a DAO layer.

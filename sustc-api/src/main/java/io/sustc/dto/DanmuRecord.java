@@ -38,5 +38,7 @@ public class DanmuRecord {
      * The users' {@code mid} who liked this danmu.
      */
     private long[] likedBy;
+
     private boolean Danmu_is_Deleted;
+
 }
