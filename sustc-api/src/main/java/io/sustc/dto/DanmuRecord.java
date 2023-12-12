@@ -5,7 +5,7 @@ import lombok.Data;
 import java.sql.Timestamp;
 
 @Data
-public class DanmuRecord {
+public class DanmuRecord  {
 
     /**
      * The danmu's video {@code bv}.
