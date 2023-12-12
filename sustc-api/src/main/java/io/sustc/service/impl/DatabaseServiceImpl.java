@@ -39,8 +39,10 @@ public class DatabaseServiceImpl implements DatabaseService {
 
     @Override
     public List<Integer> getGroupMembers() {
+
 //        throw new UnsupportedOperationException("TODO: replace this with your own student id");
         return Arrays.asList(12212108);
+
     }
 
     @Override
@@ -49,9 +51,16 @@ public class DatabaseServiceImpl implements DatabaseService {
             List<UserRecord> userRecords,
             List<VideoRecord> videoRecords
     ) {
+
         String sql_Danmu = "INSERT INTO \"DanmuRecord\"(Bv, Mid, Time, Content, PostTime, LikedBy, Danmu_is_Deleted) VALUES (?, ?, ?, ?, ?, ?, ?)";
         String sql_User = "INSERT INTO \"UserRecord\"(Mid, Name, Sex, Birthday, Level, Coin, Sign, Following, Identity, Password, QQ, WeChat, User_is_Deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         String sql_Video = "INSERT INTO \"VideoRecord\"(Bv, Title, OwnerMid, OwnerName, CommitTime, ReviewTime, PublicTime, Duration, Description, Reviewer, \"Like\", Coin, Favorite, ViewerMids, ViewTime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+        // TODO: implement your import logic
+        System.out.println(danmuRecords.size());
+        System.out.println(userRecords.size());
+        System.out.println(videoRecords.size());
+
 
         try (Connection connDanmu = dataSource.getConnection();
              Connection connUser = dataSource.getConnection();
