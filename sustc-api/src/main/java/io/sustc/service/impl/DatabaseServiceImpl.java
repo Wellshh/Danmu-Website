@@ -46,14 +46,14 @@ public class DatabaseServiceImpl implements DatabaseService {
     }
 
     @Override
-    public void importData(
-            List<DanmuRecord> danmuRecords,
-            List<UserRecord> userRecords,
-            List<VideoRecord> videoRecords
+    public void importData(//TODO:需要实现对某些插入条件的限制
+                           List<DanmuRecord> danmuRecords,
+                           List<UserRecord> userRecords,
+                           List<VideoRecord> videoRecords
     ) {
 
         String sql_Danmu = "INSERT INTO \"DanmuRecord\"(Bv, Mid, Time, Content, PostTime, LikedBy, Danmu_is_Deleted) VALUES (?, ?, ?, ?, ?, ?, ?)";
-        String sql_User = "INSERT INTO \"UserRecord\"(Mid, Name, Sex, Birthday, Level, Coin, Sign, Following, Identity, Password, QQ, WeChat, User_is_Deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql_User = "INSERT INTO \"UserRecord\"(Mid, Name, Sex, Birthday, Level, Coin, Sign, Identity, Password, QQ, WeChat,Following, User_is_Deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ? , ?, ?, ?, ?, ?)";
         String sql_Video = "INSERT INTO \"VideoRecord\"(Bv, Title, OwnerMid, OwnerName, CommitTime, ReviewTime, PublicTime, Duration, Description, Reviewer, \"Like\", Coin, Favorite, ViewerMids, ViewTime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         // TODO: implement your import logic
