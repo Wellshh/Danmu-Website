@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
 import java.sql.*;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -120,7 +121,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public boolean deleteAccount(AuthInfo auth, long mid) {
+    public boolean deleteAccount(AuthInfo auth, long mid) {//TODO:需要完成当用户被删除时，与其相关的所有信息都会被删除。
         boolean can_delete = true;
         String sql_mid = "SELECT COUNT(*) FROM \"UserRecord\" WHERE mid = ?";
         String sql_qq_wechat = "SELECT ((SELECT mid FROM \"UserRecord\" WHERE qq = ?) INTERSECT (SELECT mid FROM \"UserRecord\" WHERE wechat = ?))";
@@ -129,14 +130,15 @@ public class UserServiceImpl implements UserService {
         String delete_sql = "DELETE FROM \"UserRecord\" WHERE mid = ?";
 
         try (Connection connection = dataSource.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(sql_mid);
-             PreparedStatement preparedStatement1 = connection.prepareStatement(sql_qq_wechat);
-             PreparedStatement preparedStatement2 = connection.prepareStatement(sql_qq_wechat_existance);
-             PreparedStatement preparedStatement3 = connection.prepareStatement(sql_identity);
-             PreparedStatement preparedStatement4 = connection.prepareStatement(sql_identity);
              Connection delete_connection = dataSource.getConnection();
-             PreparedStatement delete_statement = delete_connection.prepareStatement(delete_sql);
         ) {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql_mid);
+            PreparedStatement preparedStatement1 = connection.prepareStatement(sql_qq_wechat);
+            PreparedStatement preparedStatement2 = connection.prepareStatement(sql_qq_wechat_existance);
+            PreparedStatement preparedStatement3 = connection.prepareStatement(sql_identity);
+            PreparedStatement preparedStatement4 = connection.prepareStatement(sql_identity);
+            PreparedStatement delete_statement = delete_connection.prepareStatement(delete_sql);
+
             preparedStatement.setLong(1, mid);
             preparedStatement2.setString(1, auth.getQq());
             preparedStatement2.setString(2, auth.getWechat());
@@ -149,10 +151,11 @@ public class UserServiceImpl implements UserService {
             log.info("SQL: {}", preparedStatement3);
             log.info("SQL: {}", preparedStatement4);
 
-            try (ResultSet resultSet_identity = preparedStatement3.executeQuery();
-                 ResultSet resultSet_qq_wechat = preparedStatement2.executeQuery();
-                 ResultSet resultSet_superuser = preparedStatement4.executeQuery();
-                 ResultSet resultSet = preparedStatement.executeQuery();
+            try (
+                    ResultSet resultSet_identity = preparedStatement3.executeQuery();
+                    ResultSet resultSet_qq_wechat = preparedStatement2.executeQuery();
+                    ResultSet resultSet_superuser = preparedStatement4.executeQuery();
+                    ResultSet resultSet = preparedStatement.executeQuery();
             ) {
                 resultSet_superuser.next();
                 resultSet_qq_wechat.next();
@@ -181,6 +184,7 @@ public class UserServiceImpl implements UserService {
                 if (auth.getQq() != null && auth.getWechat() != null) {
                     preparedStatement1.setString(1, auth.getQq());
                     preparedStatement1.setString(2, auth.getWechat());
+
                     try (ResultSet resultSet1 = preparedStatement1.executeQuery()) {
                         resultSet.next();
                         resultSet1.next();
@@ -200,6 +204,13 @@ public class UserServiceImpl implements UserService {
             delete_statement.setLong(1, mid);
             log.info("SQL: {}", delete_statement);
             delete_statement.executeUpdate();
+
+            preparedStatement.close();
+            preparedStatement1.close();
+            preparedStatement2.close();
+            preparedStatement3.close();
+            preparedStatement4.close();
+            delete_statement.close();
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -207,13 +218,200 @@ public class UserServiceImpl implements UserService {
         return true;
     }
 
+    public boolean CheckAuthoInfo(AuthInfo auth, long mid) {
+        String sql_mid = "SELECT COUNT(*) FROM \"UserRecord\" WHERE mid = ?";
+        String sql_qq_wechat = "SELECT ((SELECT mid FROM \"UserRecord\" WHERE qq = ?) INTERSECT (SELECT mid FROM \"UserRecord\" WHERE wechat = ?))";
+        String sql_qq_wechat_existance = "SELECT COUNT(*) FROM \"UserRecord\" WHERE qq = ? OR wechat = ?";
+        String delete_sql = "DELETE FROM \"UserRecord\" WHERE mid = ?";
+
+        try (Connection connection = dataSource.getConnection();
+             Connection delete_connection = dataSource.getConnection();
+        ) {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql_mid);
+            PreparedStatement preparedStatement1 = connection.prepareStatement(sql_qq_wechat);
+            PreparedStatement preparedStatement2 = connection.prepareStatement(sql_qq_wechat_existance);
+            PreparedStatement delete_statement = delete_connection.prepareStatement(delete_sql);
+
+            preparedStatement.setLong(1, mid);
+            preparedStatement2.setString(1, auth.getQq());
+            preparedStatement2.setString(2, auth.getWechat());
+            log.info("SQL: {}", preparedStatement);
+            log.info("SQL: {}", preparedStatement1);
+            log.info("SQL: {}", preparedStatement2);
+
+            try (
+                    ResultSet resultSet_qq_wechat = preparedStatement2.executeQuery();
+                    ResultSet resultSet = preparedStatement.executeQuery();
+            ) {
+                resultSet_qq_wechat.next();
+                resultSet.next();
+
+                if (resultSet.getInt(1) == 0) {
+                    System.out.println("can't find a user corresponding to the id");
+                    return false;
+                }
+
+                if (auth.getQq() != null && auth.getWechat() != null) {
+                    preparedStatement1.setString(1, auth.getQq());
+                    preparedStatement1.setString(2, auth.getWechat());
+
+                    try (ResultSet resultSet1 = preparedStatement1.executeQuery()) {
+                        resultSet.next();
+                        resultSet1.next();
+                        if (resultSet1.wasNull()) {
+                            System.out.println("qq and wechat don't match");
+                            return false;
+                        }
+                    }
+                } else if (resultSet.getInt(1) == 0 && (resultSet_qq_wechat.getInt(1) == 0 || (auth.getQq() == null && auth.getWechat() == null))) {
+                    System.out.println("qq and wechat are invalid");
+                    return false;
+                }
+            }
+
+            preparedStatement.close();
+            preparedStatement1.close();
+            preparedStatement2.close();
+            delete_statement.close();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+
+        return true;
+    }
+
+
     @Override
     public boolean follow(AuthInfo auth, long followeeMid) {
-        return false;
+        boolean is_follow = false;
+        if (!CheckAuthoInfo(auth, followeeMid)) {
+            System.out.println("Authentic information is wrong!");
+            return false;
+        }
+        String sql_check_following = "Select count(*) from user_following where User_1 = ? and User_2 = ?;";
+
+        try (Connection conn_follow_state = dataSource.getConnection();
+             PreparedStatement stmt_follow_state = conn_follow_state.prepareStatement(sql_check_following);
+        ) {
+            stmt_follow_state.setLong(1, auth.getMid());
+            stmt_follow_state.setLong(2, followeeMid);
+            log.info("SQL: {}", stmt_follow_state);
+            ResultSet resultSet_follow_state = stmt_follow_state.executeQuery();
+            resultSet_follow_state.next();
+            if (resultSet_follow_state.getInt(1) == 0) {
+                is_follow = false;
+                System.out.println("Not follow yet, set to follow state .....");
+                //建立关注关系，需要插入两个表
+                String sql_add_following = "UPDATE \"UserRecord\" set following = array_append(following,?) where mid = ?";
+                String sql_add_user_following = "INSERT INTO User_Following (user_1, user_2) VALUES (?,?)";
+                try (Connection conn_add_following = dataSource.getConnection();
+                     Connection conn_add_user_following = dataSource.getConnection();
+                     PreparedStatement stmt_add_following = conn_add_following.prepareStatement(sql_add_following);
+                     PreparedStatement stmt_add_user_following = conn_add_user_following.prepareStatement(sql_add_user_following);
+                ) {
+                    stmt_add_following.setLong(1, followeeMid);
+                    stmt_add_following.setLong(2, auth.getMid());
+                    stmt_add_user_following.setLong(1, auth.getMid());
+                    stmt_add_user_following.setLong(2, followeeMid);
+                    log.info("SQL: {}", stmt_add_following);
+                    log.info("SQL: {}", stmt_add_user_following);
+                    stmt_add_following.executeUpdate();
+                    stmt_add_user_following.executeUpdate();
+                    is_follow = true;
+                }
+            } else {
+                is_follow = true;
+                System.out.println("Already follow, now to delete followee  ....");
+                //删除关注的记录
+                String sql_delete_following = "UPDATE \"UserRecord\" set following = array_remove(following,?) where mid = ?";
+                String sql_delete_user_following = "DELETE from user_following where User_1 = ? and User_2 = ?";
+                try (Connection conn_delete_following = dataSource.getConnection();
+                     Connection conn_delete_user_following = dataSource.getConnection();
+                     PreparedStatement stmt_delete_following = conn_delete_following.prepareStatement(sql_delete_following);
+                     PreparedStatement stmt_delete_user_following = conn_delete_user_following.prepareStatement(sql_delete_user_following);
+                ) {
+                    stmt_delete_following.setLong(1, followeeMid);
+                    stmt_delete_following.setLong(2, auth.getMid());
+                    stmt_delete_user_following.setLong(1, auth.getMid());
+                    stmt_delete_user_following.setLong(2, followeeMid);
+                    log.info("SQL: {}", stmt_delete_following);
+                    log.info("SQL: {}", stmt_delete_user_following);
+                    stmt_delete_following.executeUpdate();
+                    stmt_delete_user_following.executeUpdate();
+                    is_follow = false;
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return is_follow;
+
+
     }
 
     @Override
     public UserInfoResp getUserInfo(long mid) {
+        String sql_find_user = "Select mid, coin,Following from \"UserRecord\" where mid = ?";
+        String sql_find_followee = """
+                Select distinct User_1
+                from user_following
+                where User_2 = ?""";
+        String sql_find_watcher = "Select  distinct bv from view_video where View_Mid = ?";
+        try (Connection conn_find_user = dataSource.getConnection();
+             Connection conn_find_followee = dataSource.getConnection();
+             Connection conn_find_watcher = dataSource.getConnection();
+             PreparedStatement stmt_find_user = conn_find_user.prepareStatement(sql_find_user);
+             PreparedStatement stmt_find_followee = conn_find_followee.prepareStatement(sql_find_followee);
+             PreparedStatement stmt_find_watcher = conn_find_watcher.prepareStatement(sql_find_watcher)
+        ) {
+            stmt_find_user.setLong(1, mid);
+            log.info("SQL: {}", stmt_find_user);
+            ResultSet resultSet_find_user = stmt_find_user.executeQuery();
+            resultSet_find_user.next();
+            if (resultSet_find_user.wasNull()) {
+                return null;
+            } else {
+                UserInfoResp user = new UserInfoResp();
+                user.setMid(mid);
+                user.setCoin(resultSet_find_user.getInt(2));
+                Array followingArray = resultSet_find_user.getArray(3);
+                if (followingArray != null) {
+                    Long[] followingData = (Long[]) followingArray.getArray();
+                    long[] followingIds = new long[followingData.length];
+                    for (int i = 0; i < followingData.length; i++) {
+                        followingIds[i] = followingData[i];
+                    }
+                    user.setFollowing(followingIds);
+                }
+                stmt_find_followee.setLong(1, mid);
+                log.info("SQL: {}", stmt_find_followee);
+                ResultSet rs_find_followee = stmt_find_followee.executeQuery();
+                List<Long> followeeIds = new ArrayList<>();
+                while (rs_find_followee.next()) {
+                    followeeIds.add(rs_find_followee.getLong(1));
+                }
+                long[] followee = new long[followeeIds.size()];
+                for (Long followeeId : followeeIds) {
+                    followee[followeeIds.indexOf(followeeId)] = followeeId;
+                }
+                user.setFollower(followee);
+                stmt_find_watcher.setLong(1,mid);
+                log.info("SQL: {}",stmt_find_watcher);
+                ResultSet rs_find_watcher = stmt_find_watcher.executeQuery();
+                List<String> videowatcher = new ArrayList<>();
+                while(rs_find_watcher.next()){
+                    videowatcher.add(resultSet_find_user.getString(1));
+                }
+                String[] video_watcher = videowatcher.toArray(new String[0]);
+                user.setWatched(video_watcher);
+
+
+
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
         return null;
+
     }
 }

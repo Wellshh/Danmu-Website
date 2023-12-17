@@ -54,9 +54,11 @@ public class DatabaseServiceImpl implements DatabaseService {
 
         String sql_Danmu = "INSERT INTO \"DanmuRecord\"(Bv, Mid, Time, Content, PostTime, LikedBy, Danmu_is_Deleted) VALUES (?, ?, ?, ?, ?, ?, ?)";
         String sql_User = "INSERT INTO \"UserRecord\"(Mid, Name, Sex, Birthday, Level, Coin, Sign, Identity, Password, QQ, WeChat,Following, User_is_Deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ? , ?, ?, ?, ?, ?)";
-        String sql_Video = "INSERT INTO \"VideoRecord\"(Bv, Title, OwnerMid, OwnerName, CommitTime, ReviewTime, PublicTime, Duration, Description, Reviewer, \"Like\", Coin, Favorite, ViewerMids, ViewTime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-        // TODO: implement your import logic
+        String sql_Video = "INSERT INTO \"VideoRecord\"(Bv, Title, OwnerMid, OwnerName, CommitTime, ReviewTime, PublicTime, Duration, Description, Reviewer, \"Like\", Coin, Favorite, ViewerMids, ViewTime, Video_is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)";
+        String sql_UserFollowing = "INSERT INTO user_following(user_1, user_2) VALUES (?, ?)";
+        String sql_ViewerMids = "Insert into view_video (Bv, View_Mid, View_Time) VALUES (?,?,?)";
+        String sql_ViewLike = "Insert into video_like (Bv, Video_LIKE_Mid) values (?,?)";
+        String sql_CollectVideo = "insert into video_collect (bv, Collected_Mid) values (?,?)";
         System.out.println(danmuRecords.size());
         System.out.println(userRecords.size());
         System.out.println(videoRecords.size());
@@ -67,7 +69,11 @@ public class DatabaseServiceImpl implements DatabaseService {
              Connection connVideo = dataSource.getConnection();
              PreparedStatement stmtDanmu = connDanmu.prepareStatement(sql_Danmu);
              PreparedStatement stmtUser = connUser.prepareStatement(sql_User);
-             PreparedStatement stmtVideo = connVideo.prepareStatement(sql_Video)
+             PreparedStatement stmtVideo = connVideo.prepareStatement(sql_Video);
+             PreparedStatement stmtUserFollowing = connUser.prepareStatement(sql_UserFollowing);
+             PreparedStatement stmtViewerMids = connVideo.prepareStatement(sql_ViewerMids);
+             PreparedStatement stmtVideoLike = connVideo.prepareStatement(sql_ViewLike);
+             PreparedStatement stmtCollectVideo = connVideo.prepareStatement(sql_CollectVideo);
         ) {
             // Insert Danmu Records
             for (DanmuRecord danmuRecord : danmuRecords) {
@@ -99,12 +105,20 @@ public class DatabaseServiceImpl implements DatabaseService {
                 stmtUser.setString(10, userRecord.getQq());
                 stmtUser.setString(11, userRecord.getWechat());
                 Long[] followingArray = Arrays.stream(userRecord.getFollowing()).boxed().toArray(Long[]::new);
+                // 遍历关注列表，插入到user_following表中
+                for (Long following : followingArray) {
+                    stmtUserFollowing.setLong(1, userRecord.getMid());
+                    stmtUserFollowing.setLong(2, following);
+                    stmtUserFollowing.executeUpdate();
+                }
                 Array followingSqlArray = connUser.createArrayOf("BIGINT", followingArray);
                 stmtUser.setArray(12, followingSqlArray);
                 stmtUser.setBoolean(13, userRecord.isUser_is_Deleted());
                 log.info("SQL: {}", stmtUser);
                 stmtUser.executeUpdate();
                 followingSqlArray.free();
+
+
             }
 
             // Insert Video Records
@@ -120,12 +134,25 @@ public class DatabaseServiceImpl implements DatabaseService {
                 stmtVideo.setString(9, videoRecord.getDescription());
                 stmtVideo.setLong(10, videoRecord.getReviewer());
                 Long[] likeArray = Arrays.stream(videoRecord.getLike()).boxed().toArray(Long[]::new);
+                //插入点赞表格，方便后续查询。
+                for (Long videolike : likeArray) {
+                    stmtVideoLike.setString(1, videoRecord.getBv());
+                    stmtVideoLike.setLong(2, videolike);
+                    stmtVideoLike.executeUpdate();
+
+                }
                 Array likeSqlArray = connVideo.createArrayOf("BIGINT", likeArray);
                 stmtVideo.setArray(11, likeSqlArray);
                 Long[] coinArray = Arrays.stream(videoRecord.getCoin()).boxed().toArray(Long[]::new);
                 Array coinSqlArray = connVideo.createArrayOf("BIGINT", coinArray);
                 stmtVideo.setArray(12, coinSqlArray);
                 Long[] favoriteArray = Arrays.stream(videoRecord.getFavorite()).boxed().toArray(Long[]::new);
+                for(Long favorite : favoriteArray){
+                    stmtCollectVideo.setString(1, videoRecord.getBv());
+                    stmtCollectVideo.setLong(2, favorite);
+                    log.info("SQL: {}",stmtCollectVideo);
+                    stmtCollectVideo.executeUpdate();
+                }
                 Array favoriteSqlArray = connVideo.createArrayOf("BIGINT", favoriteArray);
                 stmtVideo.setArray(13, favoriteSqlArray);
                 Long[] viewerMidsArray = Arrays.stream(videoRecord.getViewerMids()).boxed().toArray(Long[]::new);
@@ -136,8 +163,15 @@ public class DatabaseServiceImpl implements DatabaseService {
                 for (int i = 0; i < viewTimeArray.length; i++) {
                     viewTimeArray[i] = (double) videoRecord.getViewTime()[i];
                 }
+                for (int i = 0; i < viewerMidsArray.length; i++) {
+                    stmtViewerMids.setString(1, videoRecord.getBv());
+                    stmtViewerMids.setLong(2, viewerMidsArray[i]);
+                    stmtViewerMids.setDouble(3, viewTimeArray[i]);
+                    stmtViewerMids.executeUpdate();
+                }
 // Use the Double array in the SQL statement
                 stmtVideo.setArray(15, connVideo.createArrayOf("FLOAT8", viewTimeArray));
+                stmtVideo.setBoolean(16, false);
                 log.info("SQL: {}", stmtVideo);
                 stmtVideo.executeUpdate();
                 likeSqlArray.free();
