@@ -357,12 +357,22 @@ public class UserServiceImpl implements UserService {
                 from user_following
                 where User_2 = ?""";
         String sql_find_watcher = "Select  distinct bv from view_video where View_Mid = ?";
+        String sql_find_videolike = "Select distinct Bv from video_like where Video_LIKE_Mid = ?";
+        String sql_find_videocollecter = "Select distinct bv  from video_collect where Collected_Mid = ?";
+        String sql_find_own = "Select Bv from \"VideoRecord\" where OwnerMid = ?";
+        UserInfoResp user = new UserInfoResp();
         try (Connection conn_find_user = dataSource.getConnection();
              Connection conn_find_followee = dataSource.getConnection();
              Connection conn_find_watcher = dataSource.getConnection();
+             Connection conn_find_videolike = dataSource.getConnection();
+             Connection conn_find_videocollecter = dataSource.getConnection();
+             Connection conn_find_own = dataSource.getConnection();
              PreparedStatement stmt_find_user = conn_find_user.prepareStatement(sql_find_user);
              PreparedStatement stmt_find_followee = conn_find_followee.prepareStatement(sql_find_followee);
-             PreparedStatement stmt_find_watcher = conn_find_watcher.prepareStatement(sql_find_watcher)
+             PreparedStatement stmt_find_watcher = conn_find_watcher.prepareStatement(sql_find_watcher);
+             PreparedStatement stmt_find_videolike = conn_find_videolike.prepareStatement(sql_find_videolike);
+             PreparedStatement stmt_find_videocollecter = conn_find_videocollecter.prepareStatement(sql_find_videocollecter);
+             PreparedStatement stmt_find_own = conn_find_own.prepareStatement(sql_find_own);
         ) {
             stmt_find_user.setLong(1, mid);
             log.info("SQL: {}", stmt_find_user);
@@ -371,7 +381,7 @@ public class UserServiceImpl implements UserService {
             if (resultSet_find_user.wasNull()) {
                 return null;
             } else {
-                UserInfoResp user = new UserInfoResp();
+
                 user.setMid(mid);
                 user.setCoin(resultSet_find_user.getInt(2));
                 Array followingArray = resultSet_find_user.getArray(3);
@@ -395,23 +405,51 @@ public class UserServiceImpl implements UserService {
                     followee[followeeIds.indexOf(followeeId)] = followeeId;
                 }
                 user.setFollower(followee);
-                stmt_find_watcher.setLong(1,mid);
-                log.info("SQL: {}",stmt_find_watcher);
+                stmt_find_watcher.setLong(1, mid);
+                log.info("SQL: {}", stmt_find_watcher);
                 ResultSet rs_find_watcher = stmt_find_watcher.executeQuery();
                 List<String> videowatcher = new ArrayList<>();
-                while(rs_find_watcher.next()){
+                while (rs_find_watcher.next()) {
                     videowatcher.add(resultSet_find_user.getString(1));
                 }
                 String[] video_watcher = videowatcher.toArray(new String[0]);
                 user.setWatched(video_watcher);
-
-
-
+                stmt_find_videolike.setLong(1, mid);
+                log.info("SQL: {}", stmt_find_videolike);
+                ResultSet rs_find_videolike = stmt_find_videolike.executeQuery();
+                List<String> videoliker = new ArrayList<>();
+                while (rs_find_videolike.next()) {
+                    videoliker.add(rs_find_videolike.getString(1));
+                }
+                String[] videolike = videoliker.toArray(new String[0]);
+                user.setLiked(videolike);
+                stmt_find_videocollecter.setLong(1, mid);
+                log.info("SQL: {}", stmt_find_videocollecter);
+                ResultSet rs_find_videocollecter = stmt_find_videocollecter.executeQuery();
+                List<String> videocollector = new ArrayList<>();
+                while (rs_find_videocollecter.next()) {
+                    videocollector.add(rs_find_videocollecter.getString(1));
+                }
+                String[] videocollect = videocollector.toArray(new String[0]);
+                user.setCollected(videocollect);
+                stmt_find_own.setLong(1, mid);
+                log.info("SQL: {}", stmt_find_own);
+                ResultSet rs_find_own = stmt_find_own.executeQuery();
+                rs_find_own.next();
+                if (rs_find_own.wasNull()) {
+                    user.setPosted(null);
+                } else {
+                    List<String> posted = new ArrayList<>();
+                    while (rs_find_own.next()) {
+                        posted.add(rs_find_own.getString(1));
+                    }
+                    String[] post = posted.toArray(new String[0]);
+                    user.setPosted(post);
+                }
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
-        return null;
-
+        return user;
     }
 }
