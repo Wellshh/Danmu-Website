@@ -4,6 +4,8 @@ import io.sustc.dto.AuthInfo;
 import io.sustc.dto.RegisterUserReq;
 import io.sustc.dto.UserInfoResp;
 
+import java.sql.SQLException;
+
 public interface UserService {
 
     /**
@@ -21,7 +23,7 @@ public interface UserService {
      * </ul>
      * If any of the corner case happened, {@code -1} shall be returned.
      */
-    long register(RegisterUserReq req);
+    long register(RegisterUserReq req) throws SQLException;
 
     /**
      * Deletes a user.

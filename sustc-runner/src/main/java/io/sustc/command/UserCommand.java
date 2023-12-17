@@ -11,6 +11,8 @@ import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
 
+import java.sql.SQLException;
+
 @ShellComponent
 @ConditionalOnBean(UserService.class)
 public class UserCommand {
@@ -27,7 +29,7 @@ public class UserCommand {
             @ShellOption(defaultValue = "UNKNOWN") RegisterUserReq.Gender sex,
             @ShellOption(defaultValue = ShellOption.NULL) String birthday,
             @ShellOption(defaultValue = ShellOption.NULL) String sign
-    ) {
+    ) throws SQLException {
         val req = RegisterUserReq.builder()
                 .password(password)
                 .qq(qq)
