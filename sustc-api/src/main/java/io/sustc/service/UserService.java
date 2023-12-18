@@ -27,7 +27,9 @@ public interface UserService {
 
     /**
      * Deletes a user.
-
+     * The following relationships (this user following other users and other users following this user) shall be removed.
+     * Likewise, this user's watch records, coin records, etc. shall be removed as well.
+     *
      * @param auth indicates the current user
      * @param mid  the user to be deleted
      * @return operation success or not
