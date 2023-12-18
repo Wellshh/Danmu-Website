@@ -19,7 +19,6 @@ import java.util.List;
 public class UserServiceImpl implements UserService {
     @Autowired
     private DataSource dataSource;
-    private List<UserRecord> users;
 
     @Override
     public long register(RegisterUserReq req) throws SQLException {
@@ -218,7 +217,7 @@ public class UserServiceImpl implements UserService {
         return true;
     }
 
-    public boolean CheckAuthoInfo(AuthInfo auth, long mid) {
+    public boolean CheckAuthoInfo(AuthInfo auth) {
         String sql_mid = "SELECT COUNT(*) FROM \"UserRecord\" WHERE mid = ?";
         String sql_qq_wechat = "SELECT ((SELECT mid FROM \"UserRecord\" WHERE qq = ?) INTERSECT (SELECT mid FROM \"UserRecord\" WHERE wechat = ?))";
         String sql_qq_wechat_existance = "SELECT COUNT(*) FROM \"UserRecord\" WHERE qq = ? OR wechat = ?";
@@ -231,8 +230,6 @@ public class UserServiceImpl implements UserService {
             PreparedStatement preparedStatement1 = connection.prepareStatement(sql_qq_wechat);
             PreparedStatement preparedStatement2 = connection.prepareStatement(sql_qq_wechat_existance);
             PreparedStatement delete_statement = delete_connection.prepareStatement(delete_sql);
-
-            preparedStatement.setLong(1, mid);
             preparedStatement2.setString(1, auth.getQq());
             preparedStatement2.setString(2, auth.getWechat());
             log.info("SQL: {}", preparedStatement);
@@ -241,29 +238,20 @@ public class UserServiceImpl implements UserService {
 
             try (
                     ResultSet resultSet_qq_wechat = preparedStatement2.executeQuery();
-                    ResultSet resultSet = preparedStatement.executeQuery();
             ) {
                 resultSet_qq_wechat.next();
-                resultSet.next();
-
-                if (resultSet.getInt(1) == 0) {
-                    System.out.println("can't find a user corresponding to the id");
-                    return false;
-                }
-
                 if (auth.getQq() != null && auth.getWechat() != null) {
                     preparedStatement1.setString(1, auth.getQq());
                     preparedStatement1.setString(2, auth.getWechat());
 
                     try (ResultSet resultSet1 = preparedStatement1.executeQuery()) {
-                        resultSet.next();
                         resultSet1.next();
                         if (resultSet1.wasNull()) {
                             System.out.println("qq and wechat don't match");
                             return false;
                         }
                     }
-                } else if (resultSet.getInt(1) == 0 && (resultSet_qq_wechat.getInt(1) == 0 || (auth.getQq() == null && auth.getWechat() == null))) {
+                } else if ((resultSet_qq_wechat.getInt(1) == 0 || (auth.getQq() == null && auth.getWechat() == null))) {
                     System.out.println("qq and wechat are invalid");
                     return false;
                 }
@@ -284,7 +272,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public boolean follow(AuthInfo auth, long followeeMid) {
         boolean is_follow = false;
-        if (!CheckAuthoInfo(auth, followeeMid)) {
+        if (!CheckAuthoInfo(auth)) {
             System.out.println("Authentic information is wrong!");
             return false;
         }
