@@ -51,9 +51,9 @@ public final class BenchmarkConstants {
 
     public static final String VIDEO_UPDATE = "video-update.ser";
 
-    public static final String VIDEO_REVIEW_A = "video-review-a.ser";
+    public static final String VIDEO_REVIEW = "video-review.ser";
 
-    public static final String VIDEO_REVIEW_B = "video-review-b.ser";
+    public static final String SUPER_USER_AUTH = "super-user-auth.ser";
 
     public static final String VIDEO_SEARCH_2 = "video-search-2.ser";
 

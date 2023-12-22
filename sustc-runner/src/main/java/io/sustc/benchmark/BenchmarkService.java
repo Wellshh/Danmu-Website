@@ -45,6 +45,8 @@ public class BenchmarkService {
 
     private final Set<String> postedVideo = new ConcurrentSkipListSet<>();
 
+    private final Set<Long> registeredUser = new ConcurrentSkipListSet<>();
+
     @BenchmarkStep(order = 0, description = "Truncate tables")
     public void truncate() {
         if (!config.isStudentMode()) {
@@ -415,39 +417,7 @@ public class BenchmarkService {
         return new BenchmarkResult(pass, endTime - startTime);
     }
 
-    @BenchmarkStep(order = 16, description = "Test UserService#register(RegisterUserReq)")
-    public BenchmarkResult userRegister() {
-        List<Map.Entry<RegisterUserReq, Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.USER_REGISTER);
-        val pass = new AtomicLong();
-
-        val startTime = System.currentTimeMillis();
-        cases.forEach(it -> {
-            try {
-                val args = it.getKey();
-                val res = userService.register(args);
-                if (Boolean.TRUE.equals(it.getValue())) {
-                    if (res >= 0) {
-                        pass.incrementAndGet();
-                    } else {
-                        log.debug("Wrong answer for {}: expected >= 0, got {}", it.getKey(), res);
-                    }
-                } else {
-                    if (res < 0) {
-                        pass.incrementAndGet();
-                    } else {
-                        log.debug("Wrong answer for {}: expected < 0, got {}", it.getKey(), res);
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Exception thrown for {}", it, e);
-            }
-        });
-        val endTime = System.currentTimeMillis();
-
-        return new BenchmarkResult(pass, endTime - startTime);
-    }
-
-    @BenchmarkStep(order = 17, description = "Test VideoService#postVideo(AuthInfo, PostVideoReq)")
+    @BenchmarkStep(order = 16, description = "Test VideoService#postVideo(AuthInfo, PostVideoReq)")
     public BenchmarkResult videoPost() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_POST);
         val pass = new AtomicLong();
@@ -469,6 +439,39 @@ public class BenchmarkService {
                         pass.incrementAndGet();
                     } else {
                         log.debug("Wrong answer for {}: expected null, got {}", it.getKey(), res);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Exception thrown for {}", it, e);
+            }
+        });
+        val endTime = System.currentTimeMillis();
+
+        return new BenchmarkResult(pass, endTime - startTime);
+    }
+
+    @BenchmarkStep(order = 17, description = "Test UserService#register(RegisterUserReq)")
+    public BenchmarkResult userRegister() {
+        List<Map.Entry<RegisterUserReq, Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.USER_REGISTER);
+        val pass = new AtomicLong();
+
+        val startTime = System.currentTimeMillis();
+        cases.forEach(it -> {
+            try {
+                val args = it.getKey();
+                val res = userService.register(args);
+                if (Boolean.TRUE.equals(it.getValue())) {
+                    if (res >= 0) {
+                        registeredUser.add(res);
+                        pass.incrementAndGet();
+                    } else {
+                        log.debug("Wrong answer for {}: expected >= 0, got {}", it.getKey(), res);
+                    }
+                } else {
+                    if (res < 0) {
+                        pass.incrementAndGet();
+                    } else {
+                        log.debug("Wrong answer for {}: expected < 0, got {}", it.getKey(), res);
                     }
                 }
             } catch (Exception e) {
@@ -506,8 +509,8 @@ public class BenchmarkService {
 
     @BenchmarkStep(order = 19, description = "Test VideoService#reviewVideo(AuthInfo, String)")
     public BenchmarkResult videoReview() {
-        List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_REVIEW_A);
-        AuthInfo superuser = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_REVIEW_B);
+        List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_REVIEW);
+        AuthInfo superuser = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.SUPER_USER_AUTH);
         val pass = new AtomicLong();
 
         val startTime = System.currentTimeMillis();
@@ -565,16 +568,30 @@ public class BenchmarkService {
         return new BenchmarkResult(pass, endTime - startTime);
     }
 
-    @BenchmarkStep(order = 21, description = "Test UserService#deleteAccount(AuthInfo, long)")
-    public BenchmarkResult userDelete() {
-        List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.USER_DELETE);
+    @BenchmarkStep(order = 21, description = "Test VideoService#deleteVideo(AuthInfo, String)")
+    public BenchmarkResult videoDelete() {
+        List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_DELETE);
         val pass = new AtomicLong();
 
+        AuthInfo superuser = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.SUPER_USER_AUTH);
+
         val startTime = System.currentTimeMillis();
+        postedVideo.parallelStream().forEach(it -> {
+            try {
+                val res = videoService.deleteVideo(superuser, it);
+                if (res) {
+                    pass.incrementAndGet();
+                } else {
+                    log.debug("Wrong answer for {}: expected true, got false", it);
+                }
+            } catch (Exception e) {
+                log.error("Exception thrown for {}", it, e);
+            }
+        });
         cases.forEach(it -> {
             try {
                 val args = it.getKey();
-                val res = userService.deleteAccount((AuthInfo) args[0], (long) args[1]);
+                val res = videoService.deleteVideo((AuthInfo) args[0], (String) args[1]);
                 if (Objects.equals(it.getValue(), res)) {
                     pass.incrementAndGet();
                 } else {
@@ -589,16 +606,30 @@ public class BenchmarkService {
         return new BenchmarkResult(pass, endTime - startTime);
     }
 
-    @BenchmarkStep(order = 22, description = "Test VideoService#deleteVideo(AuthInfo, String)")
-    public BenchmarkResult videoDelete() {
-        List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_DELETE);
+    @BenchmarkStep(order = 22, description = "Test UserService#deleteAccount(AuthInfo, long)")
+    public BenchmarkResult userDelete() {
+        List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.USER_DELETE);
         val pass = new AtomicLong();
 
+        AuthInfo superuser = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.SUPER_USER_AUTH);
+
         val startTime = System.currentTimeMillis();
+        registeredUser.parallelStream().forEach(it -> {
+            try {
+                val res = userService.deleteAccount(superuser, it);
+                if (res) {
+                    pass.incrementAndGet();
+                } else {
+                    log.debug("Wrong answer for {}: expected true, got false", it);
+                }
+            } catch (Exception e) {
+                log.error("Exception thrown for {}", it, e);
+            }
+        });
         cases.forEach(it -> {
             try {
                 val args = it.getKey();
-                val res = videoService.deleteVideo((AuthInfo) args[0], (String) args[1]);
+                val res = userService.deleteAccount((AuthInfo) args[0], (long) args[1]);
                 if (Objects.equals(it.getValue(), res)) {
                     pass.incrementAndGet();
                 } else {

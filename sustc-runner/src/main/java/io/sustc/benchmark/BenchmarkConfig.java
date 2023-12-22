@@ -32,7 +32,7 @@ public class BenchmarkConfig {
      * Indicator for enabling some additional steps that only run in student mode,
      * e.g., truncate tables.
      */
-    private Boolean studentMode = false;
+    private boolean studentMode = false;
 
     @Bean
     public ThreadSafeFury fury() {
