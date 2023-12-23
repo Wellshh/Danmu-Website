@@ -94,9 +94,14 @@ public class VideoServiceImpl implements VideoService {
                 System.out.println("Public time is too early!");
                 return null;
             }
+            String sql_insertvideo = "Insert into \"VideoRecord\" (bv, title, ownermid, ownername, committime, duration, description)\n" +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)";
             try (Connection conn = dataSource.getConnection();
+                 Connection conn_insertvideo = dataSource.getConnection();
                  PreparedStatement stmt_sametitle_and_user = conn.prepareStatement(sql_sametitle_and_user);
                  PreparedStatement stmt_findmidname = conn.prepareStatement(sql_findmidname);
+                 PreparedStatement stmt_insertuser = conn_insertvideo.prepareStatement(sql_insertvideo);
+
             ) {
                 stmt_sametitle_and_user.setString(1, req.getTitle());
                 stmt_sametitle_and_user.setLong(2, auth.getMid());
@@ -120,6 +125,15 @@ public class VideoServiceImpl implements VideoService {
                 newvideoRecord.setDuration(req.getDuration());
                 newvideoRecord.setDescription(req.getDescription());
                 newvideoRecord.setVideo_is_Deleted(false);
+                stmt_insertuser.setString(1, newvideoRecord.getBv());
+                stmt_insertuser.setString(2, newvideoRecord.getTitle());
+                stmt_sametitle_and_user.setLong(3, newvideoRecord.getOwnerMid());
+                stmt_sametitle_and_user.setString(4, newvideoRecord.getOwnerName());
+                stmt_sametitle_and_user.setTimestamp(5, newvideoRecord.getCommitTime());
+                stmt_sametitle_and_user.setFloat(6, newvideoRecord.getDuration());
+                stmt_sametitle_and_user.setString(7, newvideoRecord.getDescription());
+                log.info("SQL: {}", stmt_insertuser);
+                stmt_sametitle_and_user.executeUpdate();
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
@@ -133,7 +147,7 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public boolean deleteVideo(AuthInfo auth, String bv) {
-        return false;
+        return true;
     }
 
     @Override

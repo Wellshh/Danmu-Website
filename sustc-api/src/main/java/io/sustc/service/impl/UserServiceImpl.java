@@ -10,9 +10,12 @@ import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
 import java.sql.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @Slf4j
@@ -20,15 +23,18 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private DataSource dataSource;
 
+
     @Override
     public long register(RegisterUserReq req) throws SQLException {
         boolean can_register = true;
         if (req.getPassword() == null || req.getName() == null || req.getSex() == null) {
             can_register = false;
+            System.out.println("Password and name are required");
             return -1;
         }
-        if (req.getBirthday() != null && req.getBirthday().matches("\\d{1,2}月\\d{1,2}日")) {//TODO:生日设置需要修改
+        if (req.getBirthday() != null && !req.getBirthday().matches("((0?[1-9])|(1[0-2]))月((0?[1-9])|([12][0-9])|(3[01]))日")) {
             can_register = false;
+            System.out.println("Format of birthday is wrong!");
             return -1;
         }
 
@@ -45,6 +51,7 @@ public class UserServiceImpl implements UserService {
             resultSet.next();
             if (resultSet.getInt(1) > 0) {
                 can_register = false;
+                System.out.println("there is another user with the same information!");
                 return -1;
             }
         } catch (SQLException e) {
@@ -130,6 +137,7 @@ public class UserServiceImpl implements UserService {
 
         try (Connection connection = dataSource.getConnection();
              Connection delete_connection = dataSource.getConnection();
+
         ) {
             PreparedStatement preparedStatement = connection.prepareStatement(sql_mid);
             PreparedStatement preparedStatement1 = connection.prepareStatement(sql_qq_wechat);
@@ -217,19 +225,16 @@ public class UserServiceImpl implements UserService {
         return true;
     }
 
-    public boolean CheckAuthoInfo(AuthInfo auth) {
-        String sql_mid = "SELECT COUNT(*) FROM \"UserRecord\" WHERE mid = ?";
-        String sql_qq_wechat = "SELECT ((SELECT mid FROM \"UserRecord\" WHERE qq = ?) INTERSECT (SELECT mid FROM \"UserRecord\" WHERE wechat = ?))";
-        String sql_qq_wechat_existance = "SELECT COUNT(*) FROM \"UserRecord\" WHERE qq = ? OR wechat = ?";
-        String delete_sql = "DELETE FROM \"UserRecord\" WHERE mid = ?";
-
+    public boolean CheckAuthoInfo(AuthInfo auth) {//Todo:需要修改checkAuthoInfo的逻辑
+        String sql_mid = "Select Password from \"UserRecord\" where mid = ?";//密码是否匹配
+        String sql_qq_wechat = "SELECT ((SELECT mid FROM \"UserRecord\" WHERE qq = ?) INTERSECT (SELECT mid FROM \"UserRecord\" WHERE wechat = ?))";//如果同时提供了qq和微信，是否能够匹配。
+        String sql_qq = "Select mid from \"UserRecord\" where QQ = ?";
+        String sql_wechat = "Select mid from \"UserRecord\" where wechat =?";
         try (Connection connection = dataSource.getConnection();
-             Connection delete_connection = dataSource.getConnection();
         ) {
             PreparedStatement preparedStatement = connection.prepareStatement(sql_mid);
             PreparedStatement preparedStatement1 = connection.prepareStatement(sql_qq_wechat);
-            PreparedStatement preparedStatement2 = connection.prepareStatement(sql_qq_wechat_existance);
-            PreparedStatement delete_statement = delete_connection.prepareStatement(delete_sql);
+            PreparedStatement preparedStatement2 = connection.prepareStatement(sql_qq);
             preparedStatement2.setString(1, auth.getQq());
             preparedStatement2.setString(2, auth.getWechat());
             log.info("SQL: {}", preparedStatement);
@@ -240,10 +245,14 @@ public class UserServiceImpl implements UserService {
                     ResultSet resultSet_qq_wechat = preparedStatement2.executeQuery();
             ) {
                 resultSet_qq_wechat.next();
+                if (auth.getQq() == null && auth.getWechat() == null && auth.getPassword() == null) {
+                    System.out.println("No log in information is provided!");
+                    return false;
+                }
                 if (auth.getQq() != null && auth.getWechat() != null) {
                     preparedStatement1.setString(1, auth.getQq());
                     preparedStatement1.setString(2, auth.getWechat());
-
+                    log.info("SQL: {}",preparedStatement1);
                     try (ResultSet resultSet1 = preparedStatement1.executeQuery()) {
                         resultSet1.next();
                         if (resultSet1.wasNull()) {
@@ -260,7 +269,6 @@ public class UserServiceImpl implements UserService {
             preparedStatement.close();
             preparedStatement1.close();
             preparedStatement2.close();
-            delete_statement.close();
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
