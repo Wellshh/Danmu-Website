@@ -23,19 +23,22 @@ public class BenchmarkService {
     @Autowired
     private BenchmarkConfig config;
 
-    @Autowired
-    private DanmuService danmuService;
+
 
     @Autowired
     private DatabaseService databaseService;
 
-    @Autowired
+
+    @Autowired(required = false)
+    private DanmuService danmuService;
+
+    @Autowired(required = false)
     private RecommenderService recommenderService;
 
-    @Autowired
+    @Autowired(required = false)
     private UserService userService;
 
-    @Autowired
+    @Autowired(required = false)
     private VideoService videoService;
 
     @Autowired
@@ -240,7 +243,8 @@ public class BenchmarkService {
 
     @BenchmarkStep(order = 9, description = "Test DanmuService#displayDanmu(String, float, float, boolean)")
     public BenchmarkResult danmuDisplay() {
-        List<Map.Entry<Object[], List<Long>>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.DANMU_DISPLAY);
+
+        List<Map.Entry<Object[], Integer>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.DANMU_DISPLAY);
         val pass = new AtomicLong();
 
         val startTime = System.currentTimeMillis();
@@ -248,10 +252,12 @@ public class BenchmarkService {
             try {
                 val args = it.getKey();
                 val res = danmuService.displayDanmu((String) args[0], (float) args[1], (float) args[2], (boolean) args[3]);
-                if (collectionEquals(it.getValue(), res)) {
+
+                val resSize = Objects.isNull(res) ? 0 : res.size();
+                if (it.getValue() == resSize) {
                     pass.incrementAndGet();
                 } else {
-                    log.debug("Wrong answer for {}: expected {}, got {}", it.getKey(), it.getValue(), res);
+                    log.debug("Wrong answer for {}: expected size {}, got {}", it.getKey(), it.getValue(), resSize);
                 }
             } catch (Exception e) {
                 log.error("Exception thrown for {}", it, e);

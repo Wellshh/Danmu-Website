@@ -35,7 +35,7 @@ public class BenchmarkConfig {
     private boolean studentMode = false;
 
     @Bean
-    public ThreadSafeFury fury() {
+    ThreadSafeFury fury() {
         return Fury.builder()
                 .requireClassRegistration(false)
                 .withLanguage(Language.JAVA)
@@ -46,7 +46,9 @@ public class BenchmarkConfig {
     }
 
     @Bean
-    public ObjectMapper objectMapper() {
+    ObjectMapper objectMapper() {
+
         return new ObjectMapper();
     }
 }
+
