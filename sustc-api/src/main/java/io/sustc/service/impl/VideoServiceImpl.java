@@ -21,54 +21,83 @@ public class VideoServiceImpl implements VideoService {
     private DataSource dataSource;
 
     public boolean CheckAuthoInfo(AuthInfo auth) {
-        String sql_mid = "SELECT COUNT(*) FROM \"UserRecord\" WHERE mid = ?";
-        String sql_qq_wechat = "SELECT ((SELECT mid FROM \"UserRecord\" WHERE qq = ?) INTERSECT (SELECT mid FROM \"UserRecord\" WHERE wechat = ?))";
-        String sql_qq_wechat_existance = "SELECT COUNT(*) FROM \"UserRecord\" WHERE qq = ? OR wechat = ?";
-        String delete_sql = "DELETE FROM \"UserRecord\" WHERE mid = ?";
+        String sql_mid = "Select Password from \"UserRecord\" where mid = ?";//密码是否匹配
+        String sql_qq_wechat = "SELECT ((SELECT mid FROM \"UserRecord\" WHERE qq = ?) INTERSECT (SELECT mid FROM \"UserRecord\" WHERE wechat = ?))";//如果同时提供了qq和微信，是否能够匹配。
+        String sql_qq = "Select mid from \"UserRecord\" where QQ = ?";
+        String sql_wechat = "Select mid from \"UserRecord\" where wechat =?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt_check_password = conn.prepareStatement(sql_mid);
+             PreparedStatement stmt_check_qq_wechat_match = conn.prepareStatement(sql_qq_wechat);
+             PreparedStatement stmt_checkqq_match = conn.prepareStatement(sql_qq);
+             PreparedStatement stmt_check_wechat_match = conn.prepareStatement(sql_wechat);
 
-        try (Connection connection = dataSource.getConnection();
-             Connection delete_connection = dataSource.getConnection();
         ) {
-            PreparedStatement preparedStatement = connection.prepareStatement(sql_mid);
-            PreparedStatement preparedStatement1 = connection.prepareStatement(sql_qq_wechat);
-            PreparedStatement preparedStatement2 = connection.prepareStatement(sql_qq_wechat_existance);
-            PreparedStatement delete_statement = delete_connection.prepareStatement(delete_sql);
-            preparedStatement2.setString(1, auth.getQq());
-            preparedStatement2.setString(2, auth.getWechat());
-            log.info("SQL: {}", preparedStatement);
-            log.info("SQL: {}", preparedStatement1);
-            log.info("SQL: {}", preparedStatement2);
-
-            try (
-                    ResultSet resultSet_qq_wechat = preparedStatement2.executeQuery();
-            ) {
-                resultSet_qq_wechat.next();
-                if (auth.getQq() != null && auth.getWechat() != null) {
-                    preparedStatement1.setString(1, auth.getQq());
-                    preparedStatement1.setString(2, auth.getWechat());
-
-                    try (ResultSet resultSet1 = preparedStatement1.executeQuery()) {
-                        resultSet1.next();
-                        if (resultSet1.wasNull()) {
-                            System.out.println("qq and wechat don't match");
-                            return false;
-                        }
+            stmt_check_password.setLong(1, auth.getMid());
+            log.info("SQL: {}", stmt_check_password);
+            stmt_check_qq_wechat_match.setString(1, auth.getQq());
+            stmt_check_qq_wechat_match.setString(2, auth.getWechat());
+            log.info("SQL: {}", stmt_check_qq_wechat_match);
+            stmt_checkqq_match.setString(1, auth.getQq());
+            log.info("SQL: {}", stmt_checkqq_match);
+            stmt_check_wechat_match.setString(1, auth.getWechat());
+            log.info("SQL: {}", stmt_check_wechat_match);
+            ResultSet rs_check_password = stmt_check_password.executeQuery();
+            rs_check_password.next();
+            ResultSet rs_check_qq_wechat_match = stmt_check_qq_wechat_match.executeQuery();
+            rs_check_qq_wechat_match.next();
+            ResultSet rs_checkqq_match = stmt_checkqq_match.executeQuery();
+//            rs_check_qq_wechat_match.next();
+            ResultSet rs_check_wechat_match = stmt_check_wechat_match.executeQuery();
+            rs_check_wechat_match.next();
+            //如果没有提供任何登陆方式或者只提供了用户名或者密码，返回false
+            if (auth.getQq() == null && auth.getWechat() == null && (auth.getMid() == 0 || auth.getPassword() == null)) {
+                System.out.println("No log in information is provided!");
+            }
+            //只提供了qq或者微信，登陆成功
+            if (auth.getMid() == 0 && auth.getPassword() == null && ((auth.getQq() != null && auth.getWechat() == null) || (auth.getQq() == null && auth.getWechat() != null))) {
+                if (auth.getQq() != null) {
+                    if (!rs_checkqq_match.wasNull()) {
+                        System.out.println("Only qq is provided!");
+                        return true;
                     }
-                } else if ((resultSet_qq_wechat.getInt(1) == 0 || (auth.getQq() == null && auth.getWechat() == null))) {
-                    System.out.println("qq and wechat are invalid");
-                    return false;
+                } else if (auth.getWechat() != null) {
+                    if (!rs_check_wechat_match.wasNull()) {
+                        System.out.println("Only wechat is provided!");
+                        return true;
+                    }
                 }
             }
+            //提供了两项信息，两个信息是同一个人的信息，可以登陆
+            if (auth.getPassword() != null) {
+                if (rs_check_password.getLong(1) != auth.getMid()) {
+                    System.out.println("Mid and password don't match!");
+                    return false;
+                }
+            }//密码与人不匹配
+            if(auth.getQq() != null && auth.getPassword() != null){
+                if(rs_check_password.getLong(1)!= rs_checkqq_match.getLong(1)){
+                    System.out.println("qq and password don't match!");
+                    return false;
+                }
+            }//提供了密码和qq，但是二者不匹配。
+            if(auth.getWechat() != null && auth.getPassword() != null){
+                if(rs_check_wechat_match.getLong(1)!= rs_check_password.getLong(1)) {
+                    System.out.println("wechat and password don't match!");
+                    return false;
+                }
+            }//提供了密码和微信，但是两者不匹配
+            if(auth.getWechat() != null && auth.getQq() != null){
+                if(rs_check_qq_wechat_match.wasNull()){
+                    System.out.println("qq and wechat don't match!");
+                    return false;
+                }
+            }//提供了微信和qq，但是两者不匹配
+            return true;
 
-            preparedStatement.close();
-            preparedStatement1.close();
-            preparedStatement2.close();
-            delete_statement.close();
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
 
-        return true;
     }
 
     //如何生成独一无二的bv号？
@@ -147,7 +176,12 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public boolean deleteVideo(AuthInfo auth, String bv) {
-        return true;
+        String sql_user_identiey = "Select identity from \"UserRecord\" where mid = ?";
+        try(Connection conn = dataSource.getConnection();
+            PreparedStatement stmt_user_identiey = conn.prepareStatement(sql_user_identiey);
+        ){} catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
