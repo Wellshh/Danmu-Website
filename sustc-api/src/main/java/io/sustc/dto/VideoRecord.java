@@ -87,4 +87,6 @@ public class VideoRecord implements Serializable {
      */
     private float[] viewTime;
     private boolean Video_is_Deleted;
+    private int relevance; //表示搜索的时候的相关度
+    private long viewer_num;
 }
