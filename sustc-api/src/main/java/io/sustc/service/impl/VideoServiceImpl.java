@@ -20,231 +20,242 @@ public class VideoServiceImpl implements VideoService {
     private DataSource dataSource;
 
     public boolean CheckAuthoInfo(AuthInfo auth) {
-        String sql_mid = "Select Password from \"UserRecord\" where mid = ?";//密码是否匹配
-        String sql_qq_wechat = "SELECT ((SELECT mid FROM \"UserRecord\" WHERE qq = ?) INTERSECT (SELECT mid FROM \"UserRecord\" WHERE wechat = ?))";//如果同时提供了qq和微信，是否能够匹配。
-        String sql_qq = "Select mid from \"UserRecord\" where QQ = ?";
-        String sql_wechat = "Select mid from \"UserRecord\" where wechat =?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt_check_password = conn.prepareStatement(sql_mid);
-             PreparedStatement stmt_check_qq_wechat_match = conn.prepareStatement(sql_qq_wechat);
-             PreparedStatement stmt_checkqq_match = conn.prepareStatement(sql_qq);
-             PreparedStatement stmt_check_wechat_match = conn.prepareStatement(sql_wechat);
+        String sqlPassword = "SELECT Password FROM \"UserRecord\" WHERE mid = ?";
+        String sqlQQWechatMatch = "SELECT mid FROM \"UserRecord\" WHERE qq = ? AND wechat = ?";
+        String sqlQQMatch = "SELECT mid FROM \"UserRecord\" WHERE qq = ?";
+        String sqlWechatMatch = "SELECT mid FROM \"UserRecord\" WHERE wechat = ?";
 
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmtPassword = conn.prepareStatement(sqlPassword);
+             PreparedStatement stmtQQWechatMatch = conn.prepareStatement(sqlQQWechatMatch);
+             PreparedStatement stmtQQMatch = conn.prepareStatement(sqlQQMatch);
+             PreparedStatement stmtWechatMatch = conn.prepareStatement(sqlWechatMatch);
         ) {
-            stmt_check_password.setLong(1, auth.getMid());
-            log.info("SQL: {}", stmt_check_password);
-            stmt_check_qq_wechat_match.setString(1, auth.getQq());
-            stmt_check_qq_wechat_match.setString(2, auth.getWechat());
-            log.info("SQL: {}", stmt_check_qq_wechat_match);
-            stmt_checkqq_match.setString(1, auth.getQq());
-            log.info("SQL: {}", stmt_checkqq_match);
-            stmt_check_wechat_match.setString(1, auth.getWechat());
-            log.info("SQL: {}", stmt_check_wechat_match);
-            ResultSet rs_check_password = stmt_check_password.executeQuery();
-            rs_check_password.next();
-            ResultSet rs_check_qq_wechat_match = stmt_check_qq_wechat_match.executeQuery();
-            rs_check_qq_wechat_match.next();
-            ResultSet rs_checkqq_match = stmt_checkqq_match.executeQuery();
-//            rs_check_qq_wechat_match.next();
-            ResultSet rs_check_wechat_match = stmt_check_wechat_match.executeQuery();
-            rs_check_wechat_match.next();
-            //如果没有提供任何登陆方式或者只提供了用户名或者密码，返回false
-            if (auth.getQq() == null && auth.getWechat() == null && (auth.getMid() == 0 || auth.getPassword() == null)) {
-                System.out.println("No log in information is provided!");
-            }
-            //只提供了qq或者微信，登陆成功
-            if (auth.getMid() == 0 && auth.getPassword() == null && ((auth.getQq() != null && auth.getWechat() == null) || (auth.getQq() == null && auth.getWechat() != null))) {
+            if (auth.getMid() != 0 && auth.getPassword() != null) {
+                stmtPassword.setLong(1, auth.getMid());
+                ResultSet rsPassword = stmtPassword.executeQuery();
+
+                if (rsPassword.next() && !auth.getPassword().equals(rsPassword.getString(1))) {
+                    System.out.println("Mid and password don't match!");
+                    return false;
+                }
+            } else if ((auth.getQq() != null && auth.getWechat() == null) || (auth.getWechat() != null && auth.getQq() == null)) {
                 if (auth.getQq() != null) {
-                    if (!rs_checkqq_match.wasNull()) {
+                    stmtQQMatch.setString(1, auth.getQq());
+                    ResultSet rsQQMatch = stmtQQMatch.executeQuery();
+
+                    if (rsQQMatch.next()) {
                         System.out.println("Only qq is provided!");
                         return true;
                     }
                 } else if (auth.getWechat() != null) {
-                    if (!rs_check_wechat_match.wasNull()) {
+                    stmtWechatMatch.setString(1, auth.getWechat());
+                    ResultSet rsWechatMatch = stmtWechatMatch.executeQuery();
+
+                    if (rsWechatMatch.next()) {
                         System.out.println("Only wechat is provided!");
                         return true;
                     }
                 }
+            } else if (auth.getQq() != null && auth.getWechat() != null) {
+                stmtQQWechatMatch.setString(1, auth.getQq());
+                stmtQQWechatMatch.setString(2, auth.getWechat());
+                ResultSet rsQQWechatMatch = stmtQQWechatMatch.executeQuery();
+
+                if (rsQQWechatMatch.next()) {
+                    System.out.println("QQ and Wechat match!");
+                    return true;
+                }
+            } else {
+                System.out.println("No login information is provided!");
             }
-            //提供了两项信息，两个信息是同一个人的信息，可以登陆
-            if (auth.getPassword() != null) {
-                if (rs_check_password.getLong(1) != auth.getMid()) {
-                    System.out.println("Mid and password don't match!");
-                    return false;
-                }
-            }//密码与人不匹配
-            if (auth.getQq() != null && auth.getPassword() != null) {
-                if (rs_check_password.getLong(1) != rs_checkqq_match.getLong(1)) {
-                    System.out.println("qq and password don't match!");
-                    return false;
-                }
-            }//提供了密码和qq，但是二者不匹配。
-            if (auth.getWechat() != null && auth.getPassword() != null) {
-                if (rs_check_wechat_match.getLong(1) != rs_check_password.getLong(1)) {
-                    System.out.println("wechat and password don't match!");
-                    return false;
-                }
-            }//提供了密码和微信，但是两者不匹配
-            if (auth.getWechat() != null && auth.getQq() != null) {
-                if (rs_check_qq_wechat_match.wasNull()) {
-                    System.out.println("qq and wechat don't match!");
-                    return false;
-                }
-            }//提供了微信和qq，但是两者不匹配
-            return true;
+
+            return false;
 
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
-
     }
 
+
     //如何生成独一无二的bv号？
-    @Override
     public String postVideo(AuthInfo auth, PostVideoReq req) {
-        String sql_sametitle_and_user = "SELECT COUNT(*) FROM \"VideoRecord\" v JOIN \"UserRecord\" u ON v.OwnerMid = u.mid WHERE v.Title = ? AND v.OwnerMid = ?";
-        String sql_findmidname = "SELECT u.name FROM \"UserRecord\" u WHERE u.mid = ?";
-        VideoRecord newvideoRecord = new VideoRecord();
+        String sqlSameTitleAndUser = "SELECT COUNT(*) FROM \"VideoRecord\" WHERE Title = ? AND OwnerMid = ?";
+        String sqlFindMidName = "SELECT name FROM \"UserRecord\" WHERE mid = ?";
+        VideoRecord newVideoRecord = new VideoRecord();
+
         if (!CheckAuthoInfo(auth)) {
             System.out.println("Authinfo is wrong!");
             return null;
         } else {
-            if (req.getTitle() == null) {
-                System.out.println("title is null!");
+            if (req.getTitle() == null || req.getTitle().isEmpty()) {
+                System.out.println("Title is null or empty!");
                 return null;
             }
+
             if (req.getDuration() < 10) {
-                System.out.println("duration is too short!");
+                System.out.println("Duration is too short!");
                 return null;
             }
+
             LocalDateTime localDateTime = LocalDateTime.now();
             if (req.getPublicTime().before(Timestamp.valueOf(localDateTime))) {
                 System.out.println("Public time is too early!");
                 return null;
             }
-            String sql_insertvideo = "Insert into \"VideoRecord\" (bv, title, ownermid, ownername, committime, duration, description)\n" +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)";
-            try (Connection conn = dataSource.getConnection();
-                 Connection conn_insertvideo = dataSource.getConnection();
-                 PreparedStatement stmt_sametitle_and_user = conn.prepareStatement(sql_sametitle_and_user);
-                 PreparedStatement stmt_findmidname = conn.prepareStatement(sql_findmidname);
-                 PreparedStatement stmt_insertuser = conn_insertvideo.prepareStatement(sql_insertvideo);
 
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement stmtSameTitleAndUser = conn.prepareStatement(sqlSameTitleAndUser);
+                 PreparedStatement stmtFindMidName = conn.prepareStatement(sqlFindMidName);
             ) {
-                stmt_sametitle_and_user.setString(1, req.getTitle());
-                stmt_sametitle_and_user.setLong(2, auth.getMid());
-                log.info("SQL: {}", stmt_sametitle_and_user);
-                ResultSet rs_sametitle_and_user = stmt_sametitle_and_user.executeQuery();
-                rs_sametitle_and_user.next();
-                if (rs_sametitle_and_user.getInt(1) != 0) {
+                stmtSameTitleAndUser.setString(1, req.getTitle());
+                stmtSameTitleAndUser.setLong(2, auth.getMid());
+                log.info("SQL: {}", stmtSameTitleAndUser);
+                ResultSet rsSameTitleAndUser = stmtSameTitleAndUser.executeQuery();
+                rsSameTitleAndUser.next();
+
+                if (rsSameTitleAndUser.getInt(1) != 0) {
                     System.out.println("There is already a same video!");
                     return null;
                 }
-                stmt_findmidname.setLong(1, auth.getMid());
-                log.info("SQL: {}", stmt_findmidname);
-                ResultSet rs_findmidname = stmt_findmidname.executeQuery();
-                rs_findmidname.next();
-                String authname = rs_findmidname.getString(1);
-                newvideoRecord.setBv(generatebv());
-                newvideoRecord.setTitle(req.getTitle());
-                newvideoRecord.setOwnerMid(auth.getMid());
-                newvideoRecord.setOwnerName(authname);
-                newvideoRecord.setCommitTime(Timestamp.valueOf(localDateTime));
-                newvideoRecord.setDuration(req.getDuration());
-                newvideoRecord.setDescription(req.getDescription());
-                newvideoRecord.setVideo_is_Deleted(false);
-                stmt_insertuser.setString(1, newvideoRecord.getBv());
-                stmt_insertuser.setString(2, newvideoRecord.getTitle());
-                stmt_sametitle_and_user.setLong(3, newvideoRecord.getOwnerMid());
-                stmt_sametitle_and_user.setString(4, newvideoRecord.getOwnerName());
-                stmt_sametitle_and_user.setTimestamp(5, newvideoRecord.getCommitTime());
-                stmt_sametitle_and_user.setFloat(6, newvideoRecord.getDuration());
-                stmt_sametitle_and_user.setString(7, newvideoRecord.getDescription());
-                log.info("SQL: {}", stmt_insertuser);
-                stmt_sametitle_and_user.executeUpdate();
+
+                stmtFindMidName.setLong(1, auth.getMid());
+                log.info("SQL: {}", stmtFindMidName);
+                ResultSet rsFindMidName = stmtFindMidName.executeQuery();
+                rsFindMidName.next();
+                String authName = rsFindMidName.getString(1);
+
+                newVideoRecord.setBv(generateBv());
+                newVideoRecord.setTitle(req.getTitle());
+                newVideoRecord.setOwnerMid(auth.getMid());
+                newVideoRecord.setOwnerName(authName);
+                newVideoRecord.setCommitTime(Timestamp.valueOf(localDateTime));
+                newVideoRecord.setDuration(req.getDuration());
+                newVideoRecord.setDescription(req.getDescription());
+                newVideoRecord.setVideo_is_Deleted(false);
+
+                String sqlInsertVideo = "INSERT INTO \"VideoRecord\" (bv, title, ownermid, ownername, committime, duration, description) VALUES (?, ?, ?, ?, ?, ?, ?)";
+
+                try (PreparedStatement stmtInsertVideo = conn.prepareStatement(sqlInsertVideo)) {
+                    stmtInsertVideo.setString(1, newVideoRecord.getBv());
+                    stmtInsertVideo.setString(2, newVideoRecord.getTitle());
+                    stmtInsertVideo.setLong(3, newVideoRecord.getOwnerMid());
+                    stmtInsertVideo.setString(4, newVideoRecord.getOwnerName());
+                    stmtInsertVideo.setTimestamp(5, newVideoRecord.getCommitTime());
+                    stmtInsertVideo.setFloat(6, newVideoRecord.getDuration());
+                    stmtInsertVideo.setString(7, newVideoRecord.getDescription());
+                    log.info("SQL: {}", stmtInsertVideo);
+                    stmtInsertVideo.executeUpdate();
+                }
+
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
         }
-        return newvideoRecord.getBv();
+
+        return newVideoRecord.getBv();
     }
 
-    public String generatebv() {
+    public String generateBv() {
         return "BV2".concat(String.valueOf(System.currentTimeMillis()));
     }
 
+
     @Override
     public boolean deleteVideo(AuthInfo auth, String bv) {
-        boolean authinfo = CheckAuthoInfo(auth);
-        if (authinfo == false) {
+        if (!CheckAuthoInfo(auth)) {
             return false;
         }
-        String sql_user_identiey = "Select identity from \"UserRecord\" where mid = ?";
-        String sql_video = "Select ownerMid from \"VideoRecord\" where bv = ?";
-        String sql_delete = "Delete from \"VideoRecord\" where bv = ?";
+
+        String sqlUserIdentity = "SELECT identity FROM \"UserRecord\" WHERE mid = ?";
+        String sqlVideo = "SELECT ownerMid FROM \"VideoRecord\" WHERE bv = ?";
+        String sqlDeleteVideo = "DELETE FROM \"VideoRecord\" WHERE bv = ?";
+        String sqlDeleteCoins = "DELETE FROM coin_user WHERE bv = ?";
+        String sqlDeleteLikes = "DELETE FROM video_like WHERE bv = ?";
+        String sqlDeleteCollects = "DELETE FROM video_collect WHERE bv = ?";
+        String sqlDeleteDanmu = "DELETE FROM \"DanmuRecord\" where bv = ?";
+
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt_user_identity = conn.prepareStatement(sql_user_identiey);
-             PreparedStatement stmt_video = conn.prepareStatement(sql_video);
-             PreparedStatement stmt_delete_video = conn.prepareStatement(sql_delete);
+             PreparedStatement stmtUserIdentity = conn.prepareStatement(sqlUserIdentity);
+             PreparedStatement stmtVideo = conn.prepareStatement(sqlVideo);
+             PreparedStatement stmtDeleteVideo = conn.prepareStatement(sqlDeleteVideo);
+             PreparedStatement stmtDeleteCoins = conn.prepareStatement(sqlDeleteCoins);
+             PreparedStatement stmtDeleteLikes = conn.prepareStatement(sqlDeleteLikes);
+             PreparedStatement stmtDeleteCollects = conn.prepareStatement(sqlDeleteCollects);
+             PreparedStatement stmtDeleteDanmu = conn.prepareStatement(sqlDeleteDanmu);
         ) {
-            stmt_user_identity.setLong(1, auth.getMid());
-            log.info("SQL: {}", stmt_user_identity);
-            ResultSet rs_user_identity = stmt_user_identity.executeQuery();
-            rs_user_identity.next();
-            String identity = rs_user_identity.getString(1);//查询到用户的身份
-            stmt_video.setString(1, bv);
-            log.info("SQL: {}", stmt_video);
-            ResultSet rs_video = stmt_video.executeQuery();
-            Long ownermid;
-            if (rs_video.wasNull()) {
-                return false;
-            }//没有找到对应的video
-            else {
-                rs_video.next();
-                ownermid = rs_video.getLong(1);
-                if (ownermid != auth.getMid() && String.valueOf(identity).equals("USER")) {
-                    return false;
-                }
-            }//不是video对应的owner且不是超级用户
-            stmt_delete_video.setString(1, bv);
-            log.info("SQL: {}", stmt_delete_video);
-            stmt_delete_video.executeUpdate();//删除videoRecord中的记录
-            //TODO:删除相关的项
-            return true;
+            stmtUserIdentity.setLong(1, auth.getMid());
+            log.info("SQL: {}", stmtUserIdentity);
+            ResultSet rsUserIdentity = stmtUserIdentity.executeQuery();
+            rsUserIdentity.next();
+            String identity = rsUserIdentity.getString(1);
 
+            stmtVideo.setString(1, bv);
+            log.info("SQL: {}", stmtVideo);
+            ResultSet rsVideo = stmtVideo.executeQuery();
+            Long ownerMid;
 
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public Long find_VideoOwner(String bv) {
-        String sql_find_owner = "Select ownerMid from \"VideoRecord\" where bv = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt_find_owner = conn.prepareStatement(sql_find_owner);
-
-        ) {
-            stmt_find_owner.setString(1, bv);
-            log.info("SQL: {}", stmt_find_owner);
-            ResultSet rs_findowner = stmt_find_owner.executeQuery();
-            if (rs_findowner.wasNull()) {
-                return null;
+            if (!rsVideo.next()) {
+                return false; // 没有找到对应的 video
             } else {
-                rs_findowner.next();
-                return rs_findowner.getLong(1);
+                ownerMid = rsVideo.getLong(1);
+                if (!ownerMid.equals(auth.getMid()) && !identity.equals("SUPERUSER")) {
+                    return false; // 不是 video 对应的 owner 且不是超级用户
+                }
             }
 
+            stmtDeleteVideo.setString(1, bv);
+            log.info("SQL: {}", stmtDeleteVideo);
+            stmtDeleteVideo.executeUpdate(); // 删除 VideoRecord 中的记录
+
+            // 删除相关的项
+            stmtDeleteCoins.setString(1, bv);
+            log.info("SQL: {}", stmtDeleteCoins);
+            stmtDeleteCoins.executeUpdate();
+
+            stmtDeleteLikes.setString(1, bv);
+            log.info("SQL: {}", stmtDeleteLikes);
+            stmtDeleteLikes.executeUpdate();
+
+            stmtDeleteCollects.setString(1, bv);
+            log.info("SQL: {}", stmtDeleteCollects);
+            stmtDeleteCollects.executeUpdate();
+
+            stmtDeleteDanmu.setString(1, bv);
+            log.info("SQL: {}", stmtDeleteDanmu);
+            stmtDeleteDanmu.executeUpdate();
+
+            return true;
 
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }
 
-    //TODO:需要superuser重新审核
+
+    public Long find_VideoOwner(String bv) {
+        String sqlFindOwner = "SELECT ownerMid FROM \"VideoRecord\" WHERE bv = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmtFindOwner = conn.prepareStatement(sqlFindOwner);
+        ) {
+            stmtFindOwner.setString(1, bv);
+            log.info("SQL: {}", stmtFindOwner);
+            ResultSet rsFindOwner = stmtFindOwner.executeQuery();
+            if (!rsFindOwner.next()) {
+                return null; // 没有找到对应的 video
+            } else {
+                return rsFindOwner.getLong(1);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
     @Override
     public boolean updateVideoInfo(AuthInfo auth, String bv, PostVideoReq req) {
-        String sql_video_information = "Select title,description,duration,publicTime from \"VideoRecord\" where bv = ?";
-        String sql_update_video = "UPDATE \"VideoRecord\" set title = ?,description = ?, publicTime = ?,reviewtime = ? where bv = ?";
+        String sqlVideoInformation = "SELECT title, description, duration, publicTime, reviewtime FROM \"VideoRecord\" WHERE bv = ?";
+        String sqlUpdateVideo = "UPDATE \"VideoRecord\" SET title = ?, description = ?, publicTime = ?, reviewtime = ?,reviewer = ? WHERE bv = ?";
         if (!CheckAuthoInfo(auth)) {
             System.out.println("Authinfo is wrong!");
             return false;
@@ -261,179 +272,107 @@ public class VideoServiceImpl implements VideoService {
             if (req.getPublicTime().before(Timestamp.valueOf(localDateTime))) {
                 System.out.println("Public time is too early!");
                 return false;
-            }//用户认证信息和视频信息不正确
-            if (find_VideoOwner(bv) == null) {
-                return false;
-            } else if (find_VideoOwner(bv) != auth.getMid()) {
-                return false;
             }
-            //找不到video或者不是对应的owner
+
+            Long videoOwner = find_VideoOwner(bv);
+            if (videoOwner == null || !videoOwner.equals(auth.getMid())) {
+                return false; // 找不到 video 或者不是对应的 owner
+            }
+
             try (Connection conn = dataSource.getConnection();
-                 PreparedStatement stmt_video_info = conn.prepareStatement(sql_video_information);
-                 PreparedStatement stmt_update = conn.prepareStatement(sql_update_video);
+                 PreparedStatement stmtVideoInfo = conn.prepareStatement(sqlVideoInformation);
+                 PreparedStatement stmtUpdate = conn.prepareStatement(sqlUpdateVideo);
             ) {
-                stmt_video_info.setString(1, bv);
-                log.info("SQL: {}", stmt_video_info);
-                ResultSet rs_video_info = stmt_video_info.executeQuery();
-                if (rs_video_info.wasNull()) {
-                    return false;
-                } else {
-                    rs_video_info.next();
+                stmtVideoInfo.setString(1, bv);
+                log.info("SQL: {}", stmtVideoInfo);
+                ResultSet rsVideoInfo = stmtVideoInfo.executeQuery();
+                if (!rsVideoInfo.next()) {
+                    return false; // 没有找到对应的 video
                 }
-                String title = rs_video_info.getString(1);
-                String description = rs_video_info.getString(2);
-                float duration = rs_video_info.getFloat(3);
-                Timestamp publictime = rs_video_info.getTimestamp(4);
+
+                String title = rsVideoInfo.getString(1);
+                String description = rsVideoInfo.getString(2);
+                float duration = rsVideoInfo.getFloat(3);
+                Timestamp publicTime = rsVideoInfo.getTimestamp(4);
+                Timestamp reviewTime = rsVideoInfo.getTimestamp(5);
+
                 if (req.getDuration() != duration) {
-                    return false;
-                }//duration 被改变
-                if (req.getDescription() == description && req.getTitle() == title && req.getPublicTime() == publictime) {
-                    return false;
-                }//没有更改信息。
-                stmt_update.setString(1, req.getTitle());
-                stmt_update.setString(2, req.getDescription());
-                stmt_update.setTimestamp(3, req.getPublicTime());
-                stmt_update.setString(5, bv);
-                stmt_update.setTimestamp(4, null);
-                log.info("SQL: {}", stmt_update);
-                stmt_update.executeUpdate();//执行更新操作
-                //TODO:是否需要对其他地方进行更新
-                return true;
+                    return false; // duration 被改变
+                }
+
+                if (req.getDescription().equals(description) && req.getTitle().equals(title)
+                        && req.getPublicTime().equals(publicTime)) {
+                    return false; // 没有更改信息
+                }
+
+                stmtUpdate.setString(1, req.getTitle());
+                stmtUpdate.setString(2, req.getDescription());
+                stmtUpdate.setTimestamp(3, req.getPublicTime());
+                stmtUpdate.setTimestamp(4, null); // 需要重新审核
+                stmtUpdate.setLong(5, 0);
+                stmtUpdate.setString(6, bv);
+                log.info("SQL: {}", stmtUpdate);
+                stmtUpdate.executeUpdate(); // 执行更新操作
+
+                return reviewTime != null; // 返回是否需要重新审核
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
-
-
         }
     }
+
 
     @Override
     public List<String> searchVideo(AuthInfo auth, String keywords, int pageSize, int pageNum) {
         if (!CheckAuthoInfo(auth)) {
             System.out.println("Autho Information is wrong!");
             return null;
-        }//用户认证错误
-        if (keywords.isEmpty() || keywords == null) {
-            System.out.println("keywords are null!");
-            return null;//关键字为空！
         }
+
+        if (keywords == null || keywords.isEmpty()) {
+            System.out.println("Keywords are null!");
+            return null;
+        }
+
         if (pageNum <= 0 || pageSize <= 0) {
             System.out.println("Page is wrong!");
-            return null;//pagesize有问题
+            return null;
         }
-        int relevance = 0; //关键词相关程度
-        String[] keywords_group = keywords.split(" ");
+
+        int relevance = 0; // 关键词相关程度
+        String[] keywordsGroup = keywords.split(" ");
         List<VideoRecord> results = new ArrayList<>();
-        LocalDateTime rightnow = LocalDateTime.now();
-        String sql_title_search = "Select bv,viewermids,reviewtime,title,publictime,ownermid from \"VideoRecord\" where title ILIKE ?";
-        String sql_user_identity = "Select identity from \"UserRecord\" where mid = ?";
-        String sql_keyword_search = "Select bv,viewermids,reviewtime,title,publictime,ownermid from \"VideoRecord\" where description ILIKE ?";
-        String sql_search_by_owner_name = "Select bv,viewermids,reviewtime,title,publictime,ownermid from \"VideoRecord\" where ownername ILIKE ?";
+        LocalDateTime rightNow = LocalDateTime.now();
+        String sqlTitleSearch = "SELECT bv, viewermids, reviewtime, title, publictime, ownermid FROM \"VideoRecord\" WHERE title ILIKE ?";
+        String sqlUserIdentity = "SELECT identity FROM \"UserRecord\" WHERE mid = ?";
+        String sqlKeywordSearch = "SELECT bv, viewermids, reviewtime, title, publictime, ownermid FROM \"VideoRecord\" WHERE description ILIKE ?";
+        String sqlSearchByOwnerName = "SELECT bv, viewermids, reviewtime, title, publictime, ownermid FROM \"VideoRecord\" WHERE ownername ILIKE ?";
 
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt_search_by_title = conn.prepareStatement(sql_title_search);
-             PreparedStatement stmt_user_identity = conn.prepareStatement(sql_user_identity);
-             PreparedStatement stmt_keyword_search = conn.prepareStatement(sql_keyword_search);
-             PreparedStatement stmt_search_by_owner_name = conn.prepareStatement(sql_search_by_owner_name);
-
+             PreparedStatement stmtUserIdentity = conn.prepareStatement(sqlUserIdentity);
+             PreparedStatement stmtSearchByTitle = conn.prepareStatement(sqlTitleSearch);
+             PreparedStatement stmtKeywordSearch = conn.prepareStatement(sqlKeywordSearch);
+             PreparedStatement stmtSearchByOwnerName = conn.prepareStatement(sqlSearchByOwnerName);
         ) {
-            stmt_user_identity.setLong(1, auth.getMid());
-            log.info("SQL: {}", sql_user_identity);
-            ResultSet rs_user_identity = stmt_user_identity.executeQuery();
-            rs_user_identity.next();
-            String identity = rs_user_identity.getString(1);//获取当前用户的身份信息
+            stmtUserIdentity.setLong(1, auth.getMid());
+            log.info("SQL: {}", sqlUserIdentity);
+            ResultSet rsUserIdentity = stmtUserIdentity.executeQuery();
+            rsUserIdentity.next();
+            String identity = rsUserIdentity.getString(1); // 获取当前用户的身份信息
 
-            for (String key : keywords_group) {
-                stmt_search_by_title.setString(1, "'%" + key + "%'");
-                log.info("SQL: {}", stmt_search_by_title);
-                ResultSet rs_search_by_title = stmt_search_by_title.executeQuery();
-                if (!rs_search_by_title.wasNull()) {
-                    while (rs_search_by_title.next()) {
-                        boolean already_exist = false;
-                        if ((rs_search_by_title.getTimestamp(3) != null && rs_search_by_title.getTimestamp(5).before(Timestamp.valueOf(rightnow))) || identity.equalsIgnoreCase("SUPERUSER") || auth.getMid() == rs_search_by_title.getLong(6)) {//如果是超级用户或者视频的主人，或者本身视频满足“要求”，就可以搜索到这个视频
-                            for (VideoRecord videorecord : results) {
-                                if (videorecord.getBv().equals(rs_search_by_title.getString(1))) {
-                                    //如果在结果的表中已经有匹配了，只用对relevance加一,并且将already_exist设为真。
-                                    videorecord.setRelevance(videorecord.getRelevance() + 1);
-                                    already_exist = true;
-                                    break;//TODO:是否能break?
-                                }
-                            }
-                            if (!already_exist) {
-                                VideoRecord newrecord = new VideoRecord();
-                                Array ss = rs_search_by_title.getArray(2);
-                                Object[] array = (Object[]) ss.getArray();
-                                long size = array.length;
-                                newrecord.setBv(rs_search_by_title.getString(1));
-                                newrecord.setViewer_num(size);
-                                newrecord.setRelevance(1);
-                                results.add(newrecord);
-                            }
-                        }
-                    }
-                }
+            for (String key : keywordsGroup) {
+                searchAndAddResults(stmtSearchByTitle, results, key, rightNow, auth.getMid(), identity);
             }
-            for (String key : keywords_group) {
-                stmt_keyword_search.setString(1, "'%" + key + "%'");
-                log.info("SQL: {}", stmt_keyword_search);
-                ResultSet rs_search_by_keyword = stmt_keyword_search.executeQuery();
-                if (!rs_search_by_keyword.wasNull()) {
-                    while (rs_search_by_keyword.next()) {
-                        boolean already_exist = false;
-                        if ((rs_search_by_keyword.getTimestamp(3) != null && rs_search_by_keyword.getTimestamp(5).before(Timestamp.valueOf(rightnow))) || identity.equalsIgnoreCase("SUPERUSER") || auth.getMid() == rs_search_by_keyword.getLong(6)) {//如果是超级用户或者视频的主人，或者本身视频满足“要求”，就可以搜索到这个视频
-                            for (VideoRecord videorecord : results) {
-                                if (videorecord.getBv().equals(rs_search_by_keyword.getString(1))) {
-                                    //如果在结果的表中已经有匹配了，只用对relevance加一,并且将already_exist设为真。
-                                    videorecord.setRelevance(videorecord.getRelevance() + 1);
-                                    already_exist = true;
-                                    break;//TODO:是否能break?
-                                }
-                            }
-                            if (!already_exist) {
-                                VideoRecord newrecord = new VideoRecord();
-                                Array ss = rs_search_by_keyword.getArray(2);
-                                Object[] array = (Object[]) ss.getArray();
-                                long size = array.length;
-                                newrecord.setBv(rs_search_by_keyword.getString(1));
-                                newrecord.setViewer_num(size);
-                                newrecord.setRelevance(1);
-                                results.add(newrecord);
-                            }
-                        }
-                    }
-                }
+
+            for (String key : keywordsGroup) {
+                searchAndAddResults(stmtKeywordSearch, results, key, rightNow, auth.getMid(), identity);
             }
-            for (String key : keywords_group) {
-                stmt_search_by_owner_name.setString(1, "'%" + key + "%'");
-                log.info("SQL: {}", stmt_search_by_owner_name);
-                ResultSet rs_search_by_owner_name = stmt_search_by_owner_name.executeQuery();
-                if (!rs_search_by_owner_name.wasNull()) {
-                    while (rs_search_by_owner_name.next()) {
-                        boolean already_exist = false;
-                        if ((rs_search_by_owner_name.getTimestamp(3) != null && rs_search_by_owner_name.getTimestamp(5).before(Timestamp.valueOf(rightnow))) || identity.equalsIgnoreCase("SUPERUSER") || auth.getMid() == rs_search_by_owner_name.getLong(6)) {//如果是超级用户或者视频的主人，或者本身视频满足“要求”，就可以搜索到这个视频
-                            for (VideoRecord videorecord : results) {
-                                if (videorecord.getBv().equals(rs_search_by_owner_name.getString(1))) {
-                                    //如果在结果的表中已经有匹配了，只用对relevance加一,并且将already_exist设为真。
-                                    videorecord.setRelevance(videorecord.getRelevance() + 1);
-                                    already_exist = true;
-                                    break;//TODO:是否能break?
-                                }
-                            }
-                            if (!already_exist) {
-                                VideoRecord newrecord = new VideoRecord();
-                                Array ss = rs_search_by_owner_name.getArray(2);
-                                Object[] array = (Object[]) ss.getArray();
-                                long size = array.length;
-                                newrecord.setBv(rs_search_by_owner_name.getString(1));
-                                newrecord.setViewer_num(size);
-                                newrecord.setRelevance(1);
-                                results.add(newrecord);
-                            }
-                        }
-                    }
-                }
+
+            for (String key : keywordsGroup) {
+                searchAndAddResults(stmtSearchByOwnerName, results, key, rightNow, auth.getMid(), identity);
             }
-            //添加完毕，最后根据相关度和播放量进行排序
+
+            // 添加完毕，最后根据相关度和播放量进行排序
             results.sort((record1, record2) -> {
                 int relevanceComparison = Integer.compare(record2.getRelevance(), record1.getRelevance());
                 if (relevanceComparison != 0) {
@@ -442,18 +381,51 @@ public class VideoServiceImpl implements VideoService {
                     return Long.compare(record2.getViewer_num(), record1.getViewer_num());
                 }
             });
-            List<String> final_results = new ArrayList<>();
+
+            // 排序完毕，根据 pageNumber 和 pageSize 返回结果
+            List<String> finalResults = new ArrayList<>();
             for (VideoRecord videoRecord : results) {
-                final_results.add(videoRecord.getBv());
+                finalResults.add(videoRecord.getBv());
             }
-            //排序完毕，根据pagenumber和pagesize返回值。
-            return getPaginatedResults(final_results, pageNum, pageSize);
+
+            return getPaginatedResults(finalResults, pageNum, pageSize);
+
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
-
-
     }
+
+    // Helper method to search and add results based on the given PreparedStatement
+    private void searchAndAddResults(PreparedStatement statement, List<VideoRecord> results, String keyword,
+                                     LocalDateTime rightNow, long authMid, String identity) throws SQLException {
+        statement.setString(1, "%" + keyword + "%");
+        log.info("SQL: {}", statement);
+        ResultSet resultSet = statement.executeQuery();
+        while (resultSet.next()) {
+            boolean alreadyExist = false;
+            if ((resultSet.getTimestamp(3) != null && resultSet.getTimestamp(5).before(Timestamp.valueOf(rightNow)))
+                    || identity.equalsIgnoreCase("SUPERUSER") || authMid == resultSet.getLong(6)) {
+                for (VideoRecord videoRecord : results) {
+                    if (videoRecord.getBv().equals(resultSet.getString(1))) {
+                        videoRecord.setRelevance(videoRecord.getRelevance() + 1);
+                        alreadyExist = true;
+                        break;
+                    }
+                }
+                if (!alreadyExist) {
+                    VideoRecord newRecord = new VideoRecord();
+                    Array ss = resultSet.getArray(2);
+                    Object[] array = (Object[]) ss.getArray();
+                    long size = array.length;
+                    newRecord.setBv(resultSet.getString(1));
+                    newRecord.setViewer_num(size);
+                    newRecord.setRelevance(1);
+                    results.add(newRecord);
+                }
+            }
+        }
+    }
+
 
     //该方法根据用户要求返回指定页数的子列表
     public List<String> getPaginatedResults(List<String> results, int pageNumber, int pageSize) {
@@ -510,41 +482,93 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public Set<Integer> getHotspot(String bv) {
-        if (find_VideoOwner(bv) == null){
+        if (find_VideoOwner(bv) == null) {
             return null;
         }
-//        String sql_check_danmu
-//        if ()
-        return null;
+
+        Set<Integer> hotspotChunks = new HashSet<>();
+
+        String sql_check_danmu = "SELECT id, time FROM \"DanmuRecord\" WHERE bv = ? ORDER BY time";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt_check_danmu = conn.prepareStatement(sql_check_danmu)) {
+            stmt_check_danmu.setString(1, bv);
+            log.info("SQL: {}", stmt_check_danmu);
+            ResultSet rs_check_danmu = stmt_check_danmu.executeQuery();
+
+            if (!rs_check_danmu.next()) {
+                // 结果集中没有行，意味着没有人在该视频上面发弹幕
+                return null;
+            } else {
+                int currentChunk = 0;
+                int currentChunkDanmuCount = 0;
+                int maxChunk = 0;
+                int maxChunkDanmuCount = 0;
+
+                do {
+                    long time = rs_check_danmu.getLong("time");
+                    int chunk = (int) (time / 10000);
+
+                    if (chunk == currentChunk) {
+                        // 在同一区间内，增加弹幕数量
+                        currentChunkDanmuCount++;
+                    } else {
+                        // 进入新的区间，判断是否是最多弹幕的区间
+                        if (currentChunkDanmuCount > maxChunkDanmuCount) {
+                            maxChunkDanmuCount = currentChunkDanmuCount;
+                            maxChunk = currentChunk;
+                        }
+                        // 重置当前区间
+                        currentChunk = chunk;
+                        currentChunkDanmuCount = 1;
+                    }
+
+                } while (rs_check_danmu.next());
+                // 处理最后一个区间
+                if (currentChunkDanmuCount > maxChunkDanmuCount) {
+                    maxChunk = currentChunk;
+                }
+                hotspotChunks.add(maxChunk);
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return hotspotChunks;
     }
 
-    public String find_user_identity(AuthInfo auth) {
-        String sql_find_user_identity = "Select identity from \"UserRecord\" where mid = ?";
+    public String findUserIdentity(AuthInfo auth) {
+        String sqlFindUserIdentity = "SELECT identity FROM \"UserRecord\" WHERE mid = ?";
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt_find_user_identity = conn.prepareStatement(sql_find_user_identity);
-
+             PreparedStatement stmtFindUserIdentity = conn.prepareStatement(sqlFindUserIdentity);
         ) {
-            stmt_find_user_identity.setLong(1, auth.getMid());
-            log.info("SQL: {}", stmt_find_user_identity);
-            ResultSet rs_find_user_identity = stmt_find_user_identity.executeQuery();
-            if (!rs_find_user_identity.wasNull()) {
-                return rs_find_user_identity.getString(1);
-            } else return null;
+            stmtFindUserIdentity.setLong(1, auth.getMid());
+            log.info("SQL: {}", stmtFindUserIdentity);
+            ResultSet rsFindUserIdentity = stmtFindUserIdentity.executeQuery();
+
+            if (rsFindUserIdentity.next()) {
+                return rsFindUserIdentity.getString(1);
+            } else {
+                return null;
+            }
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }
+
 
     @Override
     public boolean reviewVideo(AuthInfo auth, String bv) {
         if (!CheckAuthoInfo(auth)) {
             return false;
         }
-        if (!find_user_identity(auth).equalsIgnoreCase("USER") || find_VideoOwner(bv) == auth.getMid()) {
+
+        if (!findUserIdentity(auth).equalsIgnoreCase("USER") || find_VideoOwner(bv) == auth.getMid()) {
             return false;
         }
-        String sql_find_reviewtime = "Select reviewtime from \"VideoRecord\" where bv = ?";
-        String sql_update_review = "UPDATE \"VideoRecord\" set reviewtime = ?, reviewer = ?  where bv = ?";
+
+        String sql_find_reviewtime = "SELECT reviewtime FROM \"VideoRecord\" WHERE bv = ?";
+        String sql_update_review = "UPDATE \"VideoRecord\" SET reviewtime = ?, reviewer = ? WHERE bv = ?";
+
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt_find_reviewtime = conn.prepareStatement(sql_find_reviewtime);
              PreparedStatement stmt_update_review = conn.prepareStatement(sql_update_review);
@@ -552,221 +576,250 @@ public class VideoServiceImpl implements VideoService {
             stmt_find_reviewtime.setString(1, bv);
             log.info("SQL: {}", sql_find_reviewtime);
             ResultSet rs_find_reviewtime = stmt_find_reviewtime.executeQuery();
-            if (rs_find_reviewtime.wasNull()) {//当没有被Review过，需要将审核时间更新为当前的时间。
-                stmt_find_reviewtime.setString(3, bv);
+
+            if (!rs_find_reviewtime.next()) {// 结果集中没有行，说明没有被Review过，需要将审核时间更新为当前的时间。
+                stmt_find_reviewtime.close();  // 关闭之前的查询，释放资源
+
                 LocalDateTime localDateTime = LocalDateTime.now();
                 stmt_update_review.setTimestamp(1, Timestamp.valueOf(localDateTime));
                 stmt_update_review.setLong(2, auth.getMid());
+                stmt_update_review.setString(3, bv);
+
                 log.info("SQL: {}", stmt_update_review);
-                stmt_update_review.executeUpdate();
-                return true;
+                int rowsUpdated = stmt_update_review.executeUpdate();
+
+                return rowsUpdated > 0; // 如果更新的行数大于0，则更新成功
             } else {
-                rs_find_reviewtime.next();
                 return false;
             }
 
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
-
     }
 
     public boolean can_search(AuthInfo auth, String bv) {
-        String sql_video_info = "Select reviewtime,ownermid,publictime from \"VideoRecord\" where bv = ?";
+        String sql_video_info = "SELECT reviewtime, ownermid, publictime FROM \"VideoRecord\" WHERE bv = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt_video_info = conn.prepareStatement(sql_video_info);
         ) {
             if (!CheckAuthoInfo(auth)) {
                 return false;
             }
+
             stmt_video_info.setString(1, bv);
             log.info("SQL: {}", stmt_video_info);
             ResultSet rs_video_info = stmt_video_info.executeQuery();
-            if (rs_video_info.wasNull()) {
+
+            if (!rs_video_info.next()) { // 没有查询到结果行
                 return false;
             } else {
-                rs_video_info.next();
-                if (rs_video_info.getTimestamp(1) == null) {
+                Timestamp reviewTime = rs_video_info.getTimestamp(1);
+                long ownerMid = rs_video_info.getLong(2);
+                Timestamp publicTime = rs_video_info.getTimestamp(3);
+
+                if (reviewTime == null) {
                     return false;
                 }
+
                 LocalDateTime localDateTime = LocalDateTime.now();
-                if (rs_video_info.getTimestamp(3).after(Timestamp.valueOf(localDateTime))) {
+
+                if (publicTime != null && publicTime.after(Timestamp.valueOf(localDateTime))) {
                     return false;
                 }
-                if (rs_video_info.getLong(2) == auth.getMid() || find_user_identity(auth).equalsIgnoreCase("USER")) {
+
+                if (ownerMid == auth.getMid() || findUserIdentity(auth).equalsIgnoreCase("USER")) {
                     return false;
                 }
             }
+
             return true;
+
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }
+
 
     @Override
     public boolean coinVideo(AuthInfo auth, String bv) {
-        //只有当用户能够搜索到video的时候，才能投币
-        String sql_video_info = "Select reviewtime,ownermid,publictime from \"VideoRecord\" where bv = ?";
-        String sql_coin = "Select * from coin_user where bv = ? and coin_mid = ? ";
-        String sql_user_coin = "Select coin from \"UserRecord\" where mid = ?";
-        String sql_update_UserRecord = "UPDATE \"UserRecord\" set coin = ? where mid = ?";
-        String sql_update_VideoRecord = "UPDATE \"VideoRecord\" set coin = array_cat(coin,Array[?]) where bv = ?";
-        String sql_insert_coin_user = "Insert into coin_user (bv, coin_mid) VALUES (?,?)";
+        // 只有当用户能够搜索到 video 的时候，才能投币
+        String sqlVideoInfo = "SELECT reviewtime, ownermid, publictime FROM \"VideoRecord\" WHERE bv = ?";
+        String sqlCoin = "SELECT * FROM coin_user WHERE bv = ? AND coin_mid = ?";
+        String sqlUserCoin = "SELECT coin FROM \"UserRecord\" WHERE mid = ?";
+        String sqlUpdateUserRecord = "UPDATE \"UserRecord\" SET coin = ? WHERE mid = ?";
+        String sqlInsertCoinUser = "INSERT INTO coin_user (bv, coin_mid) VALUES (?, ?)";
+
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt_video_info = conn.prepareStatement(sql_video_info);
-             PreparedStatement stmt_coin = conn.prepareStatement(sql_coin);
-             PreparedStatement stmt_user_coin = conn.prepareStatement(sql_user_coin);
-             PreparedStatement stmt_update_UserRecord = conn.prepareStatement(sql_update_UserRecord);
-             PreparedStatement stmt_update_VideoRecord = conn.prepareStatement(sql_update_VideoRecord);
-             PreparedStatement stmt_insert_coin_user = conn.prepareStatement(sql_insert_coin_user);
+             PreparedStatement stmtVideoInfo = conn.prepareStatement(sqlVideoInfo);
+             PreparedStatement stmtCoin = conn.prepareStatement(sqlCoin);
+             PreparedStatement stmtUserCoin = conn.prepareStatement(sqlUserCoin);
+             PreparedStatement stmtUpdateUserRecord = conn.prepareStatement(sqlUpdateUserRecord);
+             PreparedStatement stmtInsertCoinUser = conn.prepareStatement(sqlInsertCoinUser);
         ) {
             if (!CheckAuthoInfo(auth)) {
                 return false;
             }
-            stmt_video_info.setString(1, bv);
-            log.info("SQL: {}", stmt_video_info);
-            ResultSet rs_video_info = stmt_video_info.executeQuery();
-            if (rs_video_info.wasNull()) {
-                return false;
-            } else {
-                rs_video_info.next();
-                if (rs_video_info.getTimestamp(1) == null) {
-                    return false;
-                }
-                LocalDateTime localDateTime = LocalDateTime.now();
-                if (rs_video_info.getTimestamp(3).after(Timestamp.valueOf(localDateTime))) {
-                    return false;
-                }
-                if (rs_video_info.getLong(2) == auth.getMid() || find_user_identity(auth).equalsIgnoreCase("USER")) {
-                    return false;
-                }
-                stmt_user_coin.setLong(1, auth.getMid());
-                log.info("SQL: {}", stmt_user_coin);
-                ResultSet rs_user_coin = stmt_user_coin.executeQuery();
-                rs_user_coin.next();
-                int user_coin = rs_user_coin.getInt(1);
-                if (user_coin <= 0) {
-                    return false;//用户没有coin
-                }
-                stmt_coin.setString(1, bv);
-                stmt_coin.setLong(2, auth.getMid());
-                log.info("SQL: {}", stmt_coin);
-                ResultSet rs_coin = stmt_coin.executeQuery();
-                if (rs_coin.wasNull()) {//用户没有投过币,需要更新UserRecord表和VideoRecord表和coin_user表
-                    stmt_update_UserRecord.setInt(1, user_coin - 1);
-                    stmt_update_UserRecord.setLong(2, auth.getMid());
-                    log.info("SQL: {}", stmt_update_UserRecord);
-                    stmt_update_UserRecord.executeUpdate();
-                    stmt_update_VideoRecord.setLong(1, auth.getMid());
-                    stmt_update_VideoRecord.setString(2, bv);
-                    log.info("SQL: {}", stmt_update_VideoRecord);
-                    stmt_update_VideoRecord.executeUpdate();
-                    stmt_insert_coin_user.setString(1, bv);
-                    stmt_insert_coin_user.setLong(2, auth.getMid());
-                    log.info("SQL: {}", stmt_insert_coin_user);
-                    stmt_insert_coin_user.executeUpdate();
-                    return true;
-                } else {
-                    return false;
-                }
+
+            stmtVideoInfo.setString(1, bv);
+            log.info("SQL: {}", stmtVideoInfo);
+            ResultSet rsVideoInfo = stmtVideoInfo.executeQuery();
+
+            if (!rsVideoInfo.next()) {
+                return false; // 未找到对应的视频
             }
+
+            if (rsVideoInfo.getTimestamp(1) == null || rsVideoInfo.getTimestamp(3).after(Timestamp.valueOf(LocalDateTime.now()))) {
+                return false; // 视频未审核或未公开
+            }
+
+            if (rsVideoInfo.getLong(2) == auth.getMid() || findUserIdentity(auth).equalsIgnoreCase("USER")) {
+                return false; // 用户是视频所有者或无法搜索该视频
+            }
+
+            stmtUserCoin.setLong(1, auth.getMid());
+            log.info("SQL: {}", stmtUserCoin);
+            ResultSet rsUserCoin = stmtUserCoin.executeQuery();
+
+            if (!rsUserCoin.next() || rsUserCoin.getInt(1) <= 0) {
+                return false; // 用户没有 coin
+            }
+
+            stmtCoin.setString(1, bv);
+            stmtCoin.setLong(2, auth.getMid());
+            log.info("SQL: {}", stmtCoin);
+            ResultSet rsCoin = stmtCoin.executeQuery();
+
+            if (!rsCoin.next()) { // 用户没有投过币
+                int updatedUserCoin = rsUserCoin.getInt(1) - 1;
+                stmtUpdateUserRecord.setInt(1, updatedUserCoin);
+                stmtUpdateUserRecord.setLong(2, auth.getMid());
+                log.info("SQL: {}", stmtUpdateUserRecord);
+                stmtUpdateUserRecord.executeUpdate();
+
+                stmtInsertCoinUser.setString(1, bv);
+                stmtInsertCoinUser.setLong(2, auth.getMid());
+                log.info("SQL: {}", stmtInsertCoinUser);
+                stmtInsertCoinUser.executeUpdate();
+
+                return true;
+            } else {
+                return false; // 用户已经投过币或无法撤回投币
+            }
+
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
-
     }
+
 
     @Override
     public boolean likeVideo(AuthInfo auth, String bv) {
         if (!can_search(auth, bv)) {
             return false;
         }
-        String sql_check_like = "Select * from video_like where bv = ? and video_like_mid = ?";
-        String sql_update_Like_VideoRecord = "UPDATE \"VideoRecord\" set \"Like\" = array_cat(\"Like\",Array[?]) where bv = ?";
-        String sql_update_video_like = "UPDATE \"VideoRecord\" set \"Like\" = array_cat(\"Like\",Array[?]) where bv = ?";
-        String sql_delete_Like_VideoRecord = "UPDATE \"VideoRecord\" set \"Like\" = array_remove(\"Like\",?) where bv = ?";
-        String sql_delete_Like_videolike = "DELETE from video_like where bv = ? and video_like_mid = ?";
+
+        String sqlCheckLike = "SELECT * FROM video_like WHERE bv = ? AND video_like_mid = ?";
+        String sqlUpdateLikeVideoRecord = "UPDATE \"VideoRecord\" SET \"Like\" = array_cat(\"Like\", Array[?]) WHERE bv = ?";
+        String sqlUpdateVideoLike = "UPDATE \"VideoRecord\" SET \"Like\" = array_cat(\"Like\", Array[?]) WHERE bv = ?";
+        String sqlDeleteLikeVideoRecord = "UPDATE \"VideoRecord\" SET \"Like\" = array_remove(\"Like\", ?) WHERE bv = ?";
+        String sqlDeleteLikeVideoLike = "DELETE FROM video_like WHERE bv = ? AND video_like_mid = ?";
+
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt_check_like = conn.prepareStatement(sql_check_like);
-             PreparedStatement stmt_update_Like_VideoRecord = conn.prepareStatement(sql_update_Like_VideoRecord);
-             PreparedStatement stmt_update_video_like = conn.prepareStatement(sql_update_video_like);
-             PreparedStatement stmt_delete_Like_VideoRecord = conn.prepareStatement(sql_delete_Like_VideoRecord);
-             PreparedStatement stmt_delete_Like_videolike = conn.prepareStatement(sql_delete_Like_videolike);
+             PreparedStatement stmtCheckLike = conn.prepareStatement(sqlCheckLike);
+             PreparedStatement stmtUpdateLikeVideoRecord = conn.prepareStatement(sqlUpdateLikeVideoRecord);
+             PreparedStatement stmtUpdateVideoLike = conn.prepareStatement(sqlUpdateVideoLike);
+             PreparedStatement stmtDeleteLikeVideoRecord = conn.prepareStatement(sqlDeleteLikeVideoRecord);
+             PreparedStatement stmtDeleteLikeVideoLike = conn.prepareStatement(sqlDeleteLikeVideoLike);
         ) {
-            stmt_check_like.setString(1, bv);
-            stmt_check_like.setLong(2, auth.getMid());
-            log.info("SQL: {}", stmt_check_like);
-            ResultSet rs_check_like = stmt_check_like.executeQuery();
-            if (rs_check_like.wasNull()) {//用户之前没有Like过
-                stmt_update_Like_VideoRecord.setLong(1, auth.getMid());
-                stmt_update_Like_VideoRecord.setString(2, bv);
-                log.info("SQL: {}", stmt_update_Like_VideoRecord);
-                stmt_update_Like_VideoRecord.executeUpdate();
-                stmt_update_video_like.setString(1, bv);
-                stmt_update_video_like.setLong(2, auth.getMid());
-                log.info("SQL: {}", stmt_update_video_like);
-                stmt_update_video_like.executeUpdate();
+            stmtCheckLike.setString(1, bv);
+            stmtCheckLike.setLong(2, auth.getMid());
+            log.info("SQL: {}", stmtCheckLike);
+            ResultSet rsCheckLike = stmtCheckLike.executeQuery();
+
+            if (!rsCheckLike.next()) {// 用户之前没有 Like 过
+                stmtUpdateLikeVideoRecord.setLong(1, auth.getMid());
+                stmtUpdateLikeVideoRecord.setString(2, bv);
+                log.info("SQL: {}", stmtUpdateLikeVideoRecord);
+                stmtUpdateLikeVideoRecord.executeUpdate();
+
+                stmtUpdateVideoLike.setString(1, bv);
+                stmtUpdateVideoLike.setLong(2, auth.getMid());
+                log.info("SQL: {}", stmtUpdateVideoLike);
+                stmtUpdateVideoLike.executeUpdate();
+
                 return true;
             } else {
-                stmt_delete_Like_VideoRecord.setLong(1, auth.getMid());
-                stmt_delete_Like_VideoRecord.setString(2, bv);
-                log.info("SQL: {}", stmt_delete_Like_VideoRecord);
-                stmt_delete_Like_VideoRecord.executeUpdate();
-                stmt_delete_Like_videolike.setString(1, bv);
-                stmt_delete_Like_videolike.setLong(2, auth.getMid());
-                log.info("SQL: {}", stmt_update_video_like);
-                stmt_update_video_like.executeUpdate();
+                stmtDeleteLikeVideoRecord.setLong(1, auth.getMid());
+                stmtDeleteLikeVideoRecord.setString(2, bv);
+                log.info("SQL: {}", stmtDeleteLikeVideoRecord);
+                stmtDeleteLikeVideoRecord.executeUpdate();
+
+                stmtDeleteLikeVideoLike.setString(1, bv);
+                stmtDeleteLikeVideoLike.setLong(2, auth.getMid());
+                log.info("SQL: {}", stmtDeleteLikeVideoLike);
+                stmtDeleteLikeVideoLike.executeUpdate();
+
                 return true;
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
-
     }
+
 
     @Override
     public boolean collectVideo(AuthInfo auth, String bv) {
-        if (!can_search(auth, bv)) ;
-        String sql_check_collect = "Select from video_collect where bv = ? and collected_mid = ?";
-        String sql_update_collect_VideoRecord = "UPDATE \"VideoRecord\" set favorite = array_cat(favorite,Array[?]) where bv = ?";
-        String sql_update_collect_video = "INSERT INTO video_collect (bv, collected_mid) VALUES (?,?)";
-        String sql_delete_collect_VideoRecord = "UPDATE \"VideoRecord\" set favorite = array_remove(favorite,Array[?]) where bv = ?";
-        String sql_delete_collect_video = "Delete from video_collect where collected_mid = ? and bv = ?";
+        if (!can_search(auth, bv)) {
+            return false;
+        }
+
+        String sqlCheckCollect = "SELECT * FROM video_collect WHERE bv = ? AND collected_mid = ?";
+        String sqlUpdateCollectVideoRecord = "UPDATE \"VideoRecord\" SET favorite = array_cat(favorite, Array[?]) WHERE bv = ?";
+        String sqlUpdateCollectVideo = "INSERT INTO video_collect (bv, collected_mid) VALUES (?, ?)";
+        String sqlDeleteCollectVideoRecord = "UPDATE \"VideoRecord\" SET favorite = array_remove(favorite, ?) WHERE bv = ?";
+        String sqlDeleteCollectVideo = "DELETE FROM video_collect WHERE collected_mid = ? AND bv = ?";
+
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt_check_collect = conn.prepareStatement(sql_check_collect);
-             PreparedStatement stmt_update_collect_VideoRecord = conn.prepareStatement(sql_update_collect_VideoRecord);
-             PreparedStatement stmt_update_collect_video = conn.prepareStatement(sql_update_collect_video);
-             PreparedStatement stmt_delete_collect_VideoRecord = conn.prepareStatement(sql_delete_collect_VideoRecord);
-             PreparedStatement stmt_delete_collect_video = conn.prepareStatement(sql_delete_collect_video);
+             PreparedStatement stmtCheckCollect = conn.prepareStatement(sqlCheckCollect);
+             PreparedStatement stmtUpdateCollectVideoRecord = conn.prepareStatement(sqlUpdateCollectVideoRecord);
+             PreparedStatement stmtUpdateCollectVideo = conn.prepareStatement(sqlUpdateCollectVideo);
+             PreparedStatement stmtDeleteCollectVideoRecord = conn.prepareStatement(sqlDeleteCollectVideoRecord);
+             PreparedStatement stmtDeleteCollectVideo = conn.prepareStatement(sqlDeleteCollectVideo);
         ) {
-            stmt_check_collect.setString(1,bv);
-            stmt_check_collect.setLong(2,auth.getMid());
-            log.info("SQL: {}",stmt_check_collect);
-            ResultSet rs_check_collect = stmt_check_collect.executeQuery();
-            if(rs_check_collect.wasNull()){//用户之前没有collect过
-                stmt_update_collect_VideoRecord.setLong(1,auth.getMid());
-                stmt_update_collect_VideoRecord.setString(2,bv);
-                log.info("SQL: {}",stmt_update_collect_VideoRecord);
-                stmt_update_collect_VideoRecord.executeUpdate();
-                stmt_update_collect_video.setString(1,bv);
-                stmt_update_collect_video.setLong(2,auth.getMid());
-                log.info("SQL: {}",stmt_update_collect_video);
-                stmt_update_collect_video.executeUpdate();
+            stmtCheckCollect.setString(1, bv);
+            stmtCheckCollect.setLong(2, auth.getMid());
+            log.info("SQL: {}", stmtCheckCollect);
+            ResultSet rsCheckCollect = stmtCheckCollect.executeQuery();
+
+            if (!rsCheckCollect.next()) {// 用户之前没有收藏过
+                stmtUpdateCollectVideoRecord.setLong(1, auth.getMid());
+                stmtUpdateCollectVideoRecord.setString(2, bv);
+                log.info("SQL: {}", stmtUpdateCollectVideoRecord);
+                stmtUpdateCollectVideoRecord.executeUpdate();
+
+                stmtUpdateCollectVideo.setString(1, bv);
+                stmtUpdateCollectVideo.setLong(2, auth.getMid());
+                log.info("SQL: {}", stmtUpdateCollectVideo);
+                stmtUpdateCollectVideo.executeUpdate();
+
                 return true;
-            }
-            else {//用户之前已经collect过了，需要删除记录
-                stmt_delete_collect_VideoRecord.setLong(1,auth.getMid());
-                stmt_delete_collect_VideoRecord.setString(2,bv);
-                log.info("SQL: {}",stmt_delete_collect_VideoRecord);
-                stmt_delete_collect_VideoRecord.executeUpdate();
-                stmt_delete_collect_video.setString(2,bv);
-                stmt_delete_collect_video.setLong(1,auth.getMid());
-                log.info("SQL: {}",stmt_delete_collect_video);
-                stmt_delete_collect_video.executeUpdate();
+            } else {// 用户之前已经收藏过了，需要取消收藏
+                stmtDeleteCollectVideoRecord.setLong(1, auth.getMid());
+                stmtDeleteCollectVideoRecord.setString(2, bv);
+                log.info("SQL: {}", stmtDeleteCollectVideoRecord);
+                stmtDeleteCollectVideoRecord.executeUpdate();
+
+                stmtDeleteCollectVideo.setString(1, bv);
+                stmtDeleteCollectVideo.setLong(2, auth.getMid());
+                log.info("SQL: {}", stmtDeleteCollectVideo);
+                stmtDeleteCollectVideo.executeUpdate();
+
                 return true;
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }
+
 }

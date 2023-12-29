@@ -77,7 +77,7 @@ public class DatabaseServiceImpl implements DatabaseService {
              PreparedStatement stmtViewerMids = connVideo.prepareStatement(sql_ViewerMids);
              PreparedStatement stmtVideoLike = connVideo.prepareStatement(sql_ViewLike);
              PreparedStatement stmtCollectVideo = connVideo.prepareStatement(sql_CollectVideo);
-             PreparedStatement stmt_video_coin = connVideo.prepareStatement(sql_Video);
+             PreparedStatement stmt_video_coin = connVideo.prepareStatement(sql_video_coin);
              PreparedStatement stmt_danmu_like = connDanmu.prepareStatement(sql_danmu_like);
         ) {
             // Insert Danmu Records
@@ -204,6 +204,7 @@ public class DatabaseServiceImpl implements DatabaseService {
             throw new RuntimeException(ex);
         }
     }
+
     /*
      * The following code is just a quick example of using jdbc datasource.
      * Practically, the code interacts with database is usually written in a DAO layer.
