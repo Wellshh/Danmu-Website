@@ -59,6 +59,7 @@ public class DatabaseServiceImpl implements DatabaseService {
         String sql_ViewerMids = "Insert into view_video (Bv, View_Mid, View_Time) VALUES (?,?,?)";
         String sql_ViewLike = "Insert into video_like (Bv, Video_LIKE_Mid) values (?,?)";
         String sql_CollectVideo = "insert into video_collect (bv, Collected_Mid) values (?,?)";
+        String sql_video_coin = "Insert into coin_user (bv, coin_mid) VALUES (?,?)";
         System.out.println(danmuRecords.size());
         System.out.println(userRecords.size());
         System.out.println(videoRecords.size());
@@ -74,6 +75,7 @@ public class DatabaseServiceImpl implements DatabaseService {
              PreparedStatement stmtViewerMids = connVideo.prepareStatement(sql_ViewerMids);
              PreparedStatement stmtVideoLike = connVideo.prepareStatement(sql_ViewLike);
              PreparedStatement stmtCollectVideo = connVideo.prepareStatement(sql_CollectVideo);
+             PreparedStatement stmt_video_coin = connVideo.prepareStatement(sql_Video);
         ) {
             // Insert Danmu Records
             for (DanmuRecord danmuRecord : danmuRecords) {
@@ -144,6 +146,12 @@ public class DatabaseServiceImpl implements DatabaseService {
                 Array likeSqlArray = connVideo.createArrayOf("BIGINT", likeArray);
                 stmtVideo.setArray(11, likeSqlArray);
                 Long[] coinArray = Arrays.stream(videoRecord.getCoin()).boxed().toArray(Long[]::new);
+                //插入投币表格
+                for(Long video_coin:coinArray){
+                    stmt_video_coin.setString(1,videoRecord.getBv());
+                    stmt_video_coin.setLong(2,video_coin);
+                    stmt_video_coin.executeUpdate();
+                }
                 Array coinSqlArray = connVideo.createArrayOf("BIGINT", coinArray);
                 stmtVideo.setArray(12, coinSqlArray);
                 Long[] favoriteArray = Arrays.stream(videoRecord.getFavorite()).boxed().toArray(Long[]::new);
