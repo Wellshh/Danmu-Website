@@ -513,8 +513,9 @@ public class VideoServiceImpl implements VideoService {
         if (find_VideoOwner(bv) == null){
             return null;
         }
-        String sql_check_danmu
-        if ()
+//        String sql_check_danmu
+//        if ()
+        return null;
     }
 
     public String find_user_identity(AuthInfo auth) {
