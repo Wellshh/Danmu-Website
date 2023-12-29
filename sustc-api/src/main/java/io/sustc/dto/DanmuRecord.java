@@ -7,6 +7,7 @@ import java.sql.Timestamp;
 
 /**
  * The danmu record used for data import
+ *
  * @implNote You may implement your own {@link java.lang.Object#toString()} since the default one in {@link lombok.Data} prints all array values.
  */
 @Data
@@ -44,5 +45,8 @@ public class DanmuRecord implements Serializable {
     private long[] likedBy;
 
     private boolean Danmu_is_Deleted;
+
+    private long id;
+
 
 }

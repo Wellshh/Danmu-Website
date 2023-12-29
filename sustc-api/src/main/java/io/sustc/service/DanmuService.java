@@ -2,6 +2,7 @@ package io.sustc.service;
 
 import io.sustc.dto.AuthInfo;
 
+import java.sql.SQLException;
 import java.util.List;
 
 public interface DanmuService {

@@ -510,7 +510,11 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     public Set<Integer> getHotspot(String bv) {
-        return null;
+        if (find_VideoOwner(bv) == null){
+            return null;
+        }
+        String sql_check_danmu
+        if ()
     }
 
     public String find_user_identity(AuthInfo auth) {

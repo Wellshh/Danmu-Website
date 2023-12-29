@@ -1,5 +1,6 @@
 package io.sustc.service.impl;
 
+import io.sustc.dto.AuthInfo;
 import io.sustc.dto.DanmuRecord;
 import io.sustc.dto.UserRecord;
 import io.sustc.dto.VideoRecord;
@@ -52,7 +53,7 @@ public class DatabaseServiceImpl implements DatabaseService {
                            List<VideoRecord> videoRecords
     ) {
 
-        String sql_Danmu = "INSERT INTO \"DanmuRecord\"(Bv, Mid, Time, Content, PostTime, LikedBy, Danmu_is_Deleted) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String sql_Danmu = "INSERT INTO \"DanmuRecord\"(Bv, Mid, Time, Content, PostTime, LikedBy, Danmu_is_Deleted,id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         String sql_User = "INSERT INTO \"UserRecord\"(Mid, Name, Sex, Birthday, Level, Coin, Sign, Identity, Password, QQ, WeChat,Following, User_is_Deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ? , ?, ?, ?, ?, ?)";
         String sql_Video = "INSERT INTO \"VideoRecord\"(Bv, Title, OwnerMid, OwnerName, CommitTime, ReviewTime, PublicTime, Duration, Description, Reviewer, \"Like\", Coin, Favorite, ViewerMids, ViewTime, Video_is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)";
         String sql_UserFollowing = "INSERT INTO user_following(user_1, user_2) VALUES (?, ?)";
@@ -60,6 +61,7 @@ public class DatabaseServiceImpl implements DatabaseService {
         String sql_ViewLike = "Insert into video_like (Bv, Video_LIKE_Mid) values (?,?)";
         String sql_CollectVideo = "insert into video_collect (bv, Collected_Mid) values (?,?)";
         String sql_video_coin = "Insert into coin_user (bv, coin_mid) VALUES (?,?)";
+        String sql_danmu_like = "INSERT INTO danmu_like (bv, danmu_like_mid, id) VALUES (?,?,?)";
         System.out.println(danmuRecords.size());
         System.out.println(userRecords.size());
         System.out.println(videoRecords.size());
@@ -76,18 +78,29 @@ public class DatabaseServiceImpl implements DatabaseService {
              PreparedStatement stmtVideoLike = connVideo.prepareStatement(sql_ViewLike);
              PreparedStatement stmtCollectVideo = connVideo.prepareStatement(sql_CollectVideo);
              PreparedStatement stmt_video_coin = connVideo.prepareStatement(sql_Video);
+             PreparedStatement stmt_danmu_like = connDanmu.prepareStatement(sql_danmu_like);
         ) {
             // Insert Danmu Records
             for (DanmuRecord danmuRecord : danmuRecords) {
+                long id = generate_danmu_id(danmuRecord.getMid());
                 stmtDanmu.setString(1, danmuRecord.getBv());
                 stmtDanmu.setLong(2, danmuRecord.getMid());
                 stmtDanmu.setFloat(3, danmuRecord.getTime());
                 stmtDanmu.setString(4, danmuRecord.getContent());
                 stmtDanmu.setTimestamp(5, danmuRecord.getPostTime());
                 Long[] likedByArray = Arrays.stream(danmuRecord.getLikedBy()).boxed().toArray(Long[]::new);
+                //将数据插入到danmu_like表格中
+                for (Long likedBy : likedByArray) {
+                    stmt_danmu_like.setString(1, danmuRecord.getBv());
+                    stmt_danmu_like.setLong(2, likedBy);
+                    stmt_danmu_like.setLong(3, id);
+                    log.info("SQL: {}", stmt_danmu_like);
+                    stmt_danmu_like.executeUpdate();
+                }
                 Array likedBySqlArray = connDanmu.createArrayOf("BIGINT", likedByArray);
                 stmtDanmu.setArray(6, likedBySqlArray);
                 stmtDanmu.setBoolean(7, danmuRecord.isDanmu_is_Deleted());
+                stmtDanmu.setLong(8, generate_danmu_id(id));
                 log.info("SQL: {}", stmtDanmu);
                 stmtDanmu.executeUpdate();
                 likedBySqlArray.free();
@@ -147,18 +160,18 @@ public class DatabaseServiceImpl implements DatabaseService {
                 stmtVideo.setArray(11, likeSqlArray);
                 Long[] coinArray = Arrays.stream(videoRecord.getCoin()).boxed().toArray(Long[]::new);
                 //插入投币表格
-                for(Long video_coin:coinArray){
-                    stmt_video_coin.setString(1,videoRecord.getBv());
-                    stmt_video_coin.setLong(2,video_coin);
+                for (Long video_coin : coinArray) {
+                    stmt_video_coin.setString(1, videoRecord.getBv());
+                    stmt_video_coin.setLong(2, video_coin);
                     stmt_video_coin.executeUpdate();
                 }
                 Array coinSqlArray = connVideo.createArrayOf("BIGINT", coinArray);
                 stmtVideo.setArray(12, coinSqlArray);
                 Long[] favoriteArray = Arrays.stream(videoRecord.getFavorite()).boxed().toArray(Long[]::new);
-                for(Long favorite : favoriteArray){
+                for (Long favorite : favoriteArray) {
                     stmtCollectVideo.setString(1, videoRecord.getBv());
                     stmtCollectVideo.setLong(2, favorite);
-                    log.info("SQL: {}",stmtCollectVideo);
+                    log.info("SQL: {}", stmtCollectVideo);
                     stmtCollectVideo.executeUpdate();
                 }
                 Array favoriteSqlArray = connVideo.createArrayOf("BIGINT", favoriteArray);
@@ -240,5 +253,10 @@ public class DatabaseServiceImpl implements DatabaseService {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public long generate_danmu_id(long mid) {
+        long timestamp = System.currentTimeMillis();
+        return (mid << 32) | (timestamp & 0xFFFFFFFFL);
     }
 }
